@@ -9,8 +9,10 @@ from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, Asyn
 import bcrypt
 
 # 关键：在导入 app.main 之前设置 TEST_DATABASE_URL
-os.environ.setdefault("TEST_DATABASE_URL", "postgresql+asyncpg://onedive:Onedive2024!@localhost:5432/diving_test")
-os.environ["DATABASE_URL"] = os.environ["TEST_DATABASE_URL"]
+# CI 环境已通过 env 设置 DATABASE_URL，应优先使用；本地无设置时用测试凭证
+if "DATABASE_URL" not in os.environ:
+    os.environ["DATABASE_URL"] = "postgresql+asyncpg://onedive:Onedive2024!@localhost:5432/diving_test"
+os.environ["TEST_DATABASE_URL"] = os.environ["DATABASE_URL"]
 
 sys.path.insert(0, "/var/www/diving/backend")
 
