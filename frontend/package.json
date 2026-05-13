@@ -1,0 +1,30 @@
+{
+  "name": "diving-platform-frontend",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "echo '⛔ DEV MODE PERMANENTLY DISABLED - 此项目已全面切换生产模式，禁止开发模式运行。如有需要请联系中央控制平台。' && exit 1",
+    "build": "next build",
+    "start": "next start"
+  },
+  "dependencies": {
+    "@ant-design/icons": "5.2.6",
+    "antd": "5.14.0",
+    "axios": "1.14.0",
+    "dayjs": "1.11.10",
+    "next": "14.1.0",
+    "pinyin": "^4.0.0",
+    "react": "18.2.0",
+    "react-dom": "18.2.0",
+    "react-markdown": "^10.1.0",
+    "rehype-raw": "^7.0.0",
+    "remark-gfm": "^4.0.1",
+    "zustand": "4.5.0"
+  },
+  "devDependencies": {
+    "@types/node": "20.11.16",
+    "@types/react": "18.2.52",
+    "@types/react-dom": "18.2.18",
+    "typescript": "5.3.3"
+  }
+}

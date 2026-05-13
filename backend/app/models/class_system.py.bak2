@@ -1,0 +1,903 @@
+"""
+班级制培训管理系统 - 数据模型
+"""
+from datetime import datetime, timezone
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, ForeignKey, Date, Enum, JSON, UniqueConstraint, ARRAY
+from sqlalchemy.orm import relationship
+import enum
+import json
+
+from app.core.database import Base
+
+
+def utcnow():
+    """Return timezone-naive UTC datetime for PostgreSQL TIMESTAMP WITHOUT TIME ZONE"""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+class UserRole(str, enum.Enum):
+    """用户角色"""
+    ADMIN = "admin"           # 管理员
+    INSTRUCTOR = "instructor" # 教练员
+    MANAGER = "manager"       # 管理干部
+    STUDENT = "student"       # 学员
+
+
+class ClassStatus(str, enum.Enum):
+    """班级状态"""
+    PENDING = "pending"   # 待开班
+    ACTIVE = "active"     # 进行中
+    ENDED = "ended"       # 已结班
+    ARCHIVED = "archived" # 已归档
+
+
+class TestType(str, enum.Enum):
+    """测验类型"""
+    HOMEWORK = "homework"  # 课后作业
+    QUIZ = "quiz"          # 随堂测验
+    EXAM = "exam"          # 正式考试
+
+
+class QuestionType(str, enum.Enum):
+    """题目类型"""
+    SINGLE = "single"      # 单选题
+    MULTIPLE = "multiple"  # 多选题
+    JUDGE = "judge"        # 判断题
+    FILL = "fill"          # 填空题
+
+
+class TestStatus(str, enum.Enum):
+    """测验状态"""
+    DRAFT = "draft"       # 草稿
+    PUBLISHED = "published"  # 已发布
+    ENDED = "ended"       # 已结束
+
+
+class User(Base):
+    """用户模型 - 改造版"""
+    __tablename__ = "users"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(50), nullable=False)
+    id_card = Column("id_card_encrypted", String(18), index=True)
+    phone = Column(String(20), index=True)
+    password_hash = Column("hashed_password", String(255))
+    role = Column(Enum(UserRole, values_callable=lambda e: [x.value for x in e]), default=UserRole.STUDENT, nullable=False)
+    avatar = Column(String(255))
+    is_active = Column(Boolean, default=True)
+    company_id = Column(Integer, nullable=True)
+    province = Column(String(50), nullable=True)
+    city = Column(String(50), nullable=True)
+    training_institution = Column(String(200), nullable=True, comment="教练所属培训机构")
+    instructor_code = Column(String(50), nullable=True, comment="教练编号")
+    category_id = Column(Integer, ForeignKey("categories.id"))
+    category = relationship("Category", back_populates="textbooks")
+    status = Column(String(20), default=None)
+    source_file_type = Column(String(20), default=None)
+    parse_version = Column(Integer, default=None)
+    total_nodes = Column(Integer, default=0)
+    updated_at = Column(DateTime, default=utcnow(), onupdate=utcnow())
+    llm_enabled = Column(Boolean, default=False)
+
+    created_at = Column(DateTime, default=utcnow())
+    updated_at = Column(DateTime, default=utcnow(), onupdate=utcnow())
+    
+    class_memberships = relationship("ClassMember", back_populates="user", cascade="all, delete-orphan")
+    reading_progress = relationship("ReadingProgress", back_populates="user", cascade="all, delete-orphan")
+    test_results = relationship("TestResult", back_populates="user", cascade="all, delete-orphan")
+    learning_stats = relationship("LearningStats", back_populates="user", cascade="all, delete-orphan")
+    chapter_progress = relationship("ChapterProgress", back_populates="user", cascade="all, delete-orphan")
+
+
+class Company(Base):
+    __tablename__ = "companies"
+    id = Column(Integer, primary_key=True)
+    name = Column(String(200), nullable=False)
+    province = Column(String(50), nullable=True)
+    city = Column(String(50), nullable=True)
+    contact = Column(String(100), nullable=True)
+    phone = Column(String(20), nullable=True)
+    created_at = Column(String(50), server_default="CURRENT_TIMESTAMP")
+    updated_at = Column(String(50), server_default="CURRENT_TIMESTAMP")
+
+
+class Class(Base):
+    """班级模型"""
+    __tablename__ = "classes"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(200), nullable=False)
+    location = Column(String(200))
+    start_time = Column(DateTime, nullable=False)
+    end_time = Column(DateTime, nullable=False)
+    status = Column(Enum(ClassStatus, values_callable=lambda e: [x.value for x in e]), default=ClassStatus.PENDING)
+    instructor_id = Column(Integer, ForeignKey("users.id"))
+    manager_id = Column(Integer, ForeignKey("users.id"))
+    textbooks = Column(Text)
+    courses = Column(JSON, nullable=True, comment="班级分配的课程 [{code, name}]")
+    created_by = Column(Integer, ForeignKey("users.id"))
+    category_id = Column(Integer, ForeignKey("categories.id"))
+    category = relationship("Category", back_populates="textbooks")
+    status = Column(String(20), default=None)
+    source_file_type = Column(String(20), default=None)
+    parse_version = Column(Integer, default=None)
+    total_nodes = Column(Integer, default=0)
+    updated_at = Column(DateTime, default=utcnow(), onupdate=utcnow())
+    llm_enabled = Column(Boolean, default=False)
+
+    created_at = Column(DateTime, default=utcnow())
+    updated_at = Column(DateTime, default=utcnow(), onupdate=utcnow())
+    
+    members = relationship("ClassMember", back_populates="cls", cascade="all, delete-orphan")
+    class_textbooks = relationship("ClassTextbook", back_populates="cls", cascade="all, delete-orphan",
+                                   foreign_keys="ClassTextbook.class_id")
+    tests = relationship("Test", back_populates="cls", cascade="all, delete-orphan")
+    instructor = relationship("User", foreign_keys=[instructor_id])
+    manager = relationship("User", foreign_keys=[manager_id])
+    
+    def get_textbook_ids(self):
+        if self.textbooks:
+            return json.loads(self.textbooks)
+        return []
+    
+    def set_textbook_ids(self, ids):
+        self.textbooks = json.dumps(ids)
+
+
+class TextbookPage(Base):
+    """教材PDF页面模型"""
+    __tablename__ = "textbook_pages"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    textbook_id = Column(Integer, ForeignKey("textbooks.id"), nullable=False)
+    page_number = Column(Integer, nullable=False)
+    image_url = Column(Text, nullable=False)
+    is_visible = Column(Boolean, default=True)  # 是否显示
+    category_id = Column(Integer, ForeignKey("categories.id"))
+    category = relationship("Category", back_populates="textbooks")
+    status = Column(String(20), default=None)
+    source_file_type = Column(String(20), default=None)
+    parse_version = Column(Integer, default=None)
+    total_nodes = Column(Integer, default=0)
+    updated_at = Column(DateTime, default=utcnow(), onupdate=utcnow())
+    llm_enabled = Column(Boolean, default=False)
+
+    created_at = Column(DateTime, default=utcnow())
+
+
+class StudentPDFProgress(Base):
+    """学员PDF阅读进度模型"""
+    __tablename__ = "student_pdf_progress"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    textbook_id = Column(Integer, ForeignKey("textbooks.id"), nullable=False)
+    class_id = Column(Integer, ForeignKey("classes.id"), nullable=False)
+    current_page = Column(Integer, default=0)
+    total_pages = Column(Integer, default=0)
+    updated_at = Column(DateTime, default=utcnow(), onupdate=utcnow())
+
+
+class ClassMember(Base):
+    """班级成员模型"""
+    __tablename__ = "class_members"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    class_id = Column(Integer, ForeignKey("classes.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    role = Column(Enum(UserRole, values_callable=lambda e: [x.value for x in e]), nullable=False)
+    joined_at = Column(DateTime, default=utcnow())
+    
+    cls = relationship("Class", back_populates="members")
+    user = relationship("User", back_populates="class_memberships")
+
+
+class ClassTextbook(Base):
+    """班级教材关联模型（统一PDF+互动式教材）"""
+    __tablename__ = "class_textbooks"
+    __table_args__ = (
+        UniqueConstraint("class_id", "textbook_id", name="uq_class_textbooks_pair"),
+    )
+    
+    id = Column(Integer, primary_key=True, index=True)
+    class_id = Column(Integer, ForeignKey("classes.id"), nullable=False)
+    textbook_id = Column(Integer, ForeignKey("textbooks.id"), nullable=False)
+    resource_type = Column(String(20), default="pdf", comment="教材类型: pdf/interactive")
+    added_at = Column(DateTime, default=utcnow())
+    
+    cls = relationship("Class", back_populates="class_textbooks")
+    textbook = relationship("Textbook")
+
+
+# ClassTextbookInteractive 已合并入 ClassTextbook，通过 resource_type 区分类型
+
+
+class Textbook(Base):
+    """教材模型"""
+    __tablename__ = "textbooks"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(200), nullable=False)
+    description = Column(Text)
+    cover_image = Column(String(255))
+    total_chapters = Column(Integer, default=0)
+    total_pages = Column(Integer, default=0)
+    file_path = Column(String(500))
+    file_type = Column(String(20), default=None)  # pdf/docx/interactive
+    has_interactive = Column(Boolean, default=False)
+    interactive_path = Column(String(500))
+    is_active = Column(Boolean, default=True)
+    # 导入状态 tracking
+    import_status = Column(String(20), default=None)  # pending/processing/success/failed
+    import_error = Column(Text, default=None)  # 导入失败时的错误信息
+    category_id = Column(Integer, ForeignKey("categories.id"))
+    category = relationship("Category", back_populates="textbooks")
+    status = Column(String(20), default=None)
+    source_file_type = Column(String(20), default=None)
+    parse_version = Column(Integer, default=None)
+    total_nodes = Column(Integer, default=0)
+    updated_at = Column(DateTime, default=utcnow(), onupdate=utcnow())
+    llm_enabled = Column(Boolean, default=False)
+
+    created_at = Column(DateTime, default=utcnow())
+    
+    chapters = relationship("Chapter", back_populates="textbook", cascade="all, delete-orphan")
+    class_textbooks = relationship("ClassTextbook", back_populates="textbook")
+    questions = relationship("Question", back_populates="textbook")
+
+
+class Chapter(Base):
+    """章节模型"""
+    __tablename__ = "chapters"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    textbook_id = Column(Integer, ForeignKey("textbooks.id"), nullable=False)
+    parent_id = Column(Integer, ForeignKey("chapters.id"))
+    title = Column(String(200), nullable=False)
+    content = Column(Text)
+    sort_order = Column(Integer, default=0)
+    page_start = Column(Integer)
+    page_end = Column(Integer)
+    
+    textbook = relationship("Textbook", back_populates="chapters")
+    children = relationship("Chapter")
+    questions = relationship("Question", back_populates="chapter")
+    exercises = relationship("ChapterExercise", back_populates="chapter")
+    progress = relationship("ChapterProgress", back_populates="chapter")
+
+
+class Question(Base):
+    """题库模型"""
+    __tablename__ = "questions"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    textbook_id = Column(Integer, ForeignKey("textbooks.id"))
+    chapter_id = Column(Integer, ForeignKey("chapters.id"))
+    question_type = Column(Enum(QuestionType, values_callable=lambda e: [x.value for x in e]), nullable=False)
+    content = Column(Text, nullable=False)
+    options = Column(Text)
+    answer = Column(Text, nullable=False)
+    explanation = Column(Text)
+    difficulty = Column(Integer, default=1)
+    created_by = Column(Integer, ForeignKey("users.id"))
+    category_id = Column(Integer, ForeignKey("categories.id"))
+    category = relationship("Category", back_populates="textbooks")
+    status = Column(String(20), default=None)
+    source_file_type = Column(String(20), default=None)
+    parse_version = Column(Integer, default=None)
+    total_nodes = Column(Integer, default=0)
+    updated_at = Column(DateTime, default=utcnow(), onupdate=utcnow())
+    llm_enabled = Column(Boolean, default=False)
+
+    created_at = Column(DateTime, default=utcnow())
+    is_active = Column(Boolean, default=True)
+    
+    textbook = relationship("Textbook", back_populates="questions")
+    chapter = relationship("Chapter", back_populates="questions")
+    
+    def get_options(self):
+        if self.options:
+            return json.loads(self.options)
+        return []
+    
+    def get_answer(self):
+        if self.answer:
+            return json.loads(self.answer)
+        return None
+
+
+class Test(Base):
+    """测验/考试模型"""
+    __tablename__ = "tests"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    class_id = Column(Integer, ForeignKey("classes.id"), nullable=False)
+    title = Column(String(200), nullable=False)
+    test_type = Column(Enum(TestType, values_callable=lambda e: [x.value for x in e]), nullable=False)
+    questions = Column(Text, nullable=False)
+    total_score = Column(Integer, default=100)
+    duration = Column(Integer)
+    start_time = Column(DateTime)
+    end_time = Column(DateTime)
+    status = Column(Enum(TestStatus, values_callable=lambda e: [x.value for x in e]), default=TestStatus.DRAFT)
+    created_by = Column(Integer, ForeignKey("users.id"))
+    category_id = Column(Integer, ForeignKey("categories.id"))
+    category = relationship("Category", back_populates="textbooks")
+    status = Column(String(20), default=None)
+    source_file_type = Column(String(20), default=None)
+    parse_version = Column(Integer, default=None)
+    total_nodes = Column(Integer, default=0)
+    updated_at = Column(DateTime, default=utcnow(), onupdate=utcnow())
+    llm_enabled = Column(Boolean, default=False)
+
+    created_at = Column(DateTime, default=utcnow())
+    
+    cls = relationship("Class", back_populates="tests")
+    results = relationship("TestResult", back_populates="test", cascade="all, delete-orphan")
+    
+    def get_question_ids(self):
+        if self.questions:
+            return json.loads(self.questions)
+        return []
+
+
+class TestResult(Base):
+    """成绩模型"""
+    __tablename__ = "test_results"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    test_id = Column(Integer, ForeignKey("tests.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    answers = Column(Text)
+    score = Column(Integer)
+    time_spent = Column(Integer)
+    submitted_at = Column(DateTime)
+    is_graded = Column(Boolean, default=False)
+    tab_switch_count = Column(Integer, default=0, comment="防作弊：切标签次数")
+    snapshot_instructor_id = Column(Integer, nullable=True, comment="快照：教练ID")
+    snapshot_instructor_name = Column(String(100), nullable=True, comment="快照：教练姓名")
+    
+    test = relationship("Test", back_populates="results")
+    user = relationship("User", back_populates="test_results")
+
+
+class ReadingProgress(Base):
+    """阅读进度模型"""
+    __tablename__ = "reading_progress"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    textbook_id = Column(Integer, ForeignKey("textbooks.id"), nullable=False)
+    chapter_id = Column(Integer, ForeignKey("chapters.id"))
+    current_page = Column(Integer, default=0)
+    progress = Column(Integer, default=0)
+    duration = Column(Integer, default=0)
+    last_read_at = Column(DateTime, default=utcnow())
+    
+    user = relationship("User", back_populates="reading_progress")
+
+
+class LearningStats(Base):
+    """学习统计模型"""
+    __tablename__ = "learning_stats"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    class_id = Column(Integer, ForeignKey("classes.id"), nullable=False)
+    date = Column(Date, nullable=False)
+    reading_duration = Column(Integer, default=0)
+    homework_completed = Column(Integer, default=0)
+    quiz_completed = Column(Integer, default=0)
+    quiz_avg_score = Column(Integer, default=0)
+    
+    user = relationship("User", back_populates="learning_stats")
+
+
+class ChapterProgressStatus(str, enum.Enum):
+    """章节进度状态"""
+    LOCKED = "locked"           # 未开始（锁定）
+    READING = "reading"         # 阅读中
+    READING_DONE = "reading_done"  # 阅读完成
+    PRACTICING = "practicing"   # 练习中
+    PRACTICE_DONE = "practice_done"  # 练习完成
+    WAITING_TEST = "waiting_test"  # 等待随堂测验发布
+    COMPLETED = "completed"     # 全部完成
+
+
+class ChapterProgress(Base):
+    """学员章节进度模型"""
+    __tablename__ = "chapter_progress"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    class_id = Column(Integer, ForeignKey("classes.id"), nullable=False)
+    chapter_id = Column(Integer, ForeignKey("chapters.id"), nullable=False)
+    status = Column(Enum(ChapterProgressStatus, values_callable=lambda e: [x.value for x in e]), default=ChapterProgressStatus.LOCKED)
+    reading_start_at = Column(DateTime)
+    reading_done_at = Column(DateTime)
+    practice_start_at = Column(DateTime)
+    practice_done_at = Column(DateTime)
+    test_published_at = Column(DateTime)
+    completed_at = Column(DateTime)
+    total_reading_time = Column(Integer, default=0)  # 秒
+    reading_pages = Column(Integer, default=0)
+    tab_switch_count = Column(Integer, default=0)  # 防作弊：切标签次数
+    last_updated = Column(DateTime, default=utcnow(), onupdate=utcnow())
+    
+    user = relationship("User", back_populates="chapter_progress")
+    chapter = relationship("Chapter", back_populates="progress")
+
+
+class ChapterExercise(Base):
+    """课后练习模型 - 每节配套练习"""
+    __tablename__ = "chapter_exercises"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    chapter_id = Column(Integer, ForeignKey("chapters.id"), nullable=False)
+    question_id = Column(Integer, ForeignKey("questions.id"), nullable=False)
+    sort_order = Column(Integer, default=0)
+    category_id = Column(Integer, ForeignKey("categories.id"))
+    category = relationship("Category", back_populates="textbooks")
+    status = Column(String(20), default=None)
+    source_file_type = Column(String(20), default=None)
+    parse_version = Column(Integer, default=None)
+    total_nodes = Column(Integer, default=0)
+    updated_at = Column(DateTime, default=utcnow(), onupdate=utcnow())
+    llm_enabled = Column(Boolean, default=False)
+
+    created_at = Column(DateTime, default=utcnow())
+    
+    chapter = relationship("Chapter", back_populates="exercises")
+
+
+class DocumentTemplate(Base):
+    """入学文书模版"""
+    __tablename__ = "document_templates"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String(200), nullable=False, comment="文书名称")
+    doc_type = Column(String(50), nullable=False, comment="类型: health/waiver/agreement/questionnaire")
+    description = Column(Text, nullable=True, comment="说明")
+    static_html = Column(Text, nullable=True, comment="固定正文HTML（声明书/协议原文）")
+    fields_schema = Column(JSON, nullable=True, comment="动态字段JSON定义")
+    coach_choices = Column(JSON, nullable=True, comment="教练选项列表 [{id, name, code, institution}]")
+    course_choices = Column(JSON, nullable=True, comment="课程选项列表 [{id, name}]")
+    institution_name = Column(String(200), nullable=True, comment="培训机构名称（全局固定）")
+    is_required = Column(Boolean, default=True)
+    sort_order = Column(Integer, default=0)
+    is_active = Column(Boolean, default=True)
+    category_id = Column(Integer, ForeignKey("categories.id"))
+    category = relationship("Category", back_populates="textbooks")
+    status = Column(String(20), default=None)
+    source_file_type = Column(String(20), default=None)
+    parse_version = Column(Integer, default=None)
+    total_nodes = Column(Integer, default=0)
+    updated_at = Column(DateTime, default=utcnow(), onupdate=utcnow())
+    llm_enabled = Column(Boolean, default=False)
+
+    created_at = Column(DateTime, default=utcnow())
+    updated_at = Column(DateTime, default=utcnow(), onupdate=utcnow())
+
+
+class DocumentResponse(Base):
+    """学员文书填写记录"""
+    __tablename__ = "document_responses"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    student_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    template_id = Column(Integer, ForeignKey("document_templates.id"), nullable=False)
+    answers = Column(JSON, nullable=True, comment="字段ID→值")
+    signature_image = Column(String(500), nullable=True, comment="签名图片路径")
+    snapshot_name = Column(String(100), nullable=True, comment="快照：姓名")
+    snapshot_id_number = Column(String(50), nullable=True, comment="快照：身份证号")
+    snapshot_phone = Column(String(50), nullable=True, comment="快照：电话")
+    snapshot_instructor_id = Column(Integer, nullable=True, comment="快照：教练ID")
+    snapshot_instructor_name = Column(String(100), nullable=True, comment="快照：教练姓名")
+    status = Column(String(50), default="pending", comment="pending/submitted/approved/rejected")
+    submitted_at = Column(DateTime, nullable=True)
+    reviewed_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    review_comment = Column(Text, nullable=True)
+    reviewed_at = Column(DateTime, nullable=True)
+    category_id = Column(Integer, ForeignKey("categories.id"))
+    category = relationship("Category", back_populates="textbooks")
+    status = Column(String(20), default=None)
+    source_file_type = Column(String(20), default=None)
+    parse_version = Column(Integer, default=None)
+    total_nodes = Column(Integer, default=0)
+    updated_at = Column(DateTime, default=utcnow(), onupdate=utcnow())
+    llm_enabled = Column(Boolean, default=False)
+
+    created_at = Column(DateTime, default=utcnow())
+    updated_at = Column(DateTime, default=utcnow(), onupdate=utcnow())
+
+    # 关系
+    student = relationship("User", foreign_keys=[student_id])
+    reviewer = relationship("User", foreign_keys=[reviewed_by])
+    template = relationship("DocumentTemplate")
+
+
+class StudentDocumentStatus(Base):
+    """学员4份文件的整体状态"""
+    __tablename__ = "student_document_status"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    student_id = Column(Integer, ForeignKey("users.id"), nullable=False, unique=True)
+    overall_locked = Column(Boolean, default=True, comment="true=锁定，不能开始学习")
+    approved_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    approved_at = Column(DateTime, nullable=True)
+    category_id = Column(Integer, ForeignKey("categories.id"))
+    category = relationship("Category", back_populates="textbooks")
+    status = Column(String(20), default=None)
+    source_file_type = Column(String(20), default=None)
+    parse_version = Column(Integer, default=None)
+    total_nodes = Column(Integer, default=0)
+    updated_at = Column(DateTime, default=utcnow(), onupdate=utcnow())
+    llm_enabled = Column(Boolean, default=False)
+
+    created_at = Column(DateTime, default=utcnow())
+    updated_at = Column(DateTime, default=utcnow(), onupdate=utcnow())
+
+    student = relationship("User", foreign_keys=[student_id])
+    approver = relationship("User", foreign_keys=[approved_by])
+
+
+# ═══════════════════════════════════════════════
+# 学习工具模型：笔记 & 书签 & 搜索
+# ═══════════════════════════════════════════════
+
+class ChapterNote(Base):
+    """学员学习笔记"""
+    __tablename__ = "chapter_notes"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    class_id = Column(Integer, ForeignKey("classes.id"), nullable=False)
+    chapter_id = Column(Integer, ForeignKey("chapters.id"), nullable=False)
+    content = Column(Text, nullable=False)
+    category_id = Column(Integer, ForeignKey("categories.id"))
+    category = relationship("Category", back_populates="textbooks")
+    status = Column(String(20), default=None)
+    source_file_type = Column(String(20), default=None)
+    parse_version = Column(Integer, default=None)
+    total_nodes = Column(Integer, default=0)
+    updated_at = Column(DateTime, default=utcnow(), onupdate=utcnow())
+    llm_enabled = Column(Boolean, default=False)
+
+    created_at = Column(DateTime, default=utcnow())
+    updated_at = Column(DateTime, default=utcnow(), onupdate=utcnow())
+
+    user = relationship("User", foreign_keys=[user_id])
+    chapter = relationship("Chapter")
+
+
+class ChapterBookmark(Base):
+    """学员书签"""
+    __tablename__ = "chapter_bookmarks"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    class_id = Column(Integer, ForeignKey("classes.id"), nullable=False)
+    chapter_id = Column(Integer, ForeignKey("chapters.id"), nullable=False)
+    note = Column(String(200))  # 书签备注
+    category_id = Column(Integer, ForeignKey("categories.id"))
+    category = relationship("Category", back_populates="textbooks")
+    status = Column(String(20), default=None)
+    source_file_type = Column(String(20), default=None)
+    parse_version = Column(Integer, default=None)
+    total_nodes = Column(Integer, default=0)
+    updated_at = Column(DateTime, default=utcnow(), onupdate=utcnow())
+    llm_enabled = Column(Boolean, default=False)
+
+    created_at = Column(DateTime, default=utcnow())
+
+    user = relationship("User", foreign_keys=[user_id])
+    chapter = relationship("Chapter")
+
+
+# ═══════════════════════════════════════════════
+# 公告 & 问答
+# ═══════════════════════════════════════════════
+
+class Announcement(Base):
+    """班级公告"""
+    __tablename__ = "announcements"
+
+    id = Column(Integer, primary_key=True, index=True)
+    class_id = Column(Integer, ForeignKey("classes.id"), nullable=False)
+    title = Column(String(200), nullable=False)
+    content = Column(Text, nullable=False)
+    created_by = Column(Integer, ForeignKey("users.id"))
+    pinned = Column(Boolean, default=False)
+    category_id = Column(Integer, ForeignKey("categories.id"))
+    category = relationship("Category", back_populates="textbooks")
+    status = Column(String(20), default=None)
+    source_file_type = Column(String(20), default=None)
+    parse_version = Column(Integer, default=None)
+    total_nodes = Column(Integer, default=0)
+    updated_at = Column(DateTime, default=utcnow(), onupdate=utcnow())
+    llm_enabled = Column(Boolean, default=False)
+
+    created_at = Column(DateTime, default=utcnow())
+
+    creator = relationship("User", foreign_keys=[created_by])
+
+
+class QAQuestion(Base):
+    """学员提问"""
+    __tablename__ = "qa_questions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    class_id = Column(Integer, ForeignKey("classes.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    title = Column(String(200), nullable=False)
+    content = Column(Text, nullable=False)
+    reply = Column(Text)
+    replied_by = Column(Integer, ForeignKey("users.id"))
+    replied_at = Column(DateTime)
+    category_id = Column(Integer, ForeignKey("categories.id"))
+    category = relationship("Category", back_populates="textbooks")
+    status = Column(String(20), default=None)
+    source_file_type = Column(String(20), default=None)
+    parse_version = Column(Integer, default=None)
+    total_nodes = Column(Integer, default=0)
+    updated_at = Column(DateTime, default=utcnow(), onupdate=utcnow())
+    llm_enabled = Column(Boolean, default=False)
+
+    created_at = Column(DateTime, default=utcnow())
+
+    asker = relationship("User", foreign_keys=[user_id])
+    replier = relationship("User", foreign_keys=[replied_by])
+
+
+# ═══════════════════════════════════════════════
+# 系统配置
+# ═══════════════════════════════════════════════
+
+class SystemConfig(Base):
+    """系统配置键值对"""
+    __tablename__ = "system_config"
+
+    id = Column(Integer, primary_key=True, index=True)
+    key = Column(String(100), unique=True, nullable=False)
+    value = Column(Text)
+    updated_at = Column(DateTime, default=utcnow(), onupdate=utcnow())
+
+
+# ═══════════════════════════════════════════════
+# 操作审计日志
+# ═══════════════════════════════════════════════
+
+class AuditLog(Base):
+    """操作审计日志"""
+    __tablename__ = "audit_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    user_name = Column(String(100))
+    user_role = Column(String(50))
+    action = Column(String(100), index=True)      # login, view_chapter, submit_exercise, take_test, export, etc.
+    target_type = Column(String(50))               # chapter, exercise, test, class, certificate, etc.
+    target_id = Column(Integer, nullable=True)
+    target_name = Column(String(200))
+    details = Column(Text)
+    ip_address = Column(String(50))
+    created_at = Column(DateTime, default=utcnow(), index=True)
+
+
+# ═══════════════════════════════════════════════
+# 预警系统
+# ═══════════════════════════════════════════════
+
+class AlertRule(Base):
+    """预警规则配置"""
+    __tablename__ = "alert_rules"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(100), nullable=False)
+    rule_type = Column(String(50), nullable=False)  # inactivity, score_drop, fail_rate, low_progress
+    threshold_value = Column(Integer, default=0)     # 3天不活跃 / 30%成绩下降 / 60%不及格率 / 50%进度
+    enabled = Column(Boolean, default=True)
+    notify_roles = Column(String(200), default="manager,instructor")  # comma-separated
+    category_id = Column(Integer, ForeignKey("categories.id"))
+    category = relationship("Category", back_populates="textbooks")
+    status = Column(String(20), default=None)
+    source_file_type = Column(String(20), default=None)
+    parse_version = Column(Integer, default=None)
+    total_nodes = Column(Integer, default=0)
+    updated_at = Column(DateTime, default=utcnow(), onupdate=utcnow())
+    llm_enabled = Column(Boolean, default=False)
+
+    created_at = Column(DateTime, default=utcnow())
+    updated_at = Column(DateTime, default=utcnow(), onupdate=utcnow())
+
+
+class AlertRecord(Base):
+    """预警记录"""
+    __tablename__ = "alert_records"
+
+    id = Column(Integer, primary_key=True, index=True)
+    rule_id = Column(Integer, ForeignKey("alert_rules.id"), nullable=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    user_name = Column(String(100))
+    class_id = Column(Integer, ForeignKey("classes.id"), nullable=True)
+    class_name = Column(String(100))
+    alert_type = Column(String(50), index=True)
+    alert_message = Column(Text, nullable=False)
+    severity = Column(String(20), default="warning")  # warning, critical
+    is_read = Column(Boolean, default=False, index=True)
+    is_resolved = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=utcnow(), index=True)
+    resolved_at = Column(DateTime, nullable=True)
+    resolved_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+
+
+# ═══════════════════════════════════════════════
+# 分层教学
+# ═══════════════════════════════════════════════
+
+class LearningPath(Base):
+    """学员学习路径（分层教学）"""
+    __tablename__ = "learning_paths"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, unique=True)
+    class_id = Column(Integer, ForeignKey("classes.id"), nullable=False)
+    path_type = Column(String(20), nullable=False, default="normal")  # fast, normal, reinforcement
+    assigned_reason = Column(String(200))           # "成绩优秀≥90%" / "基础薄弱<60%" / "默认路径"
+    current_stage = Column(Integer, default=0)
+    fast_track_skipped = Column(Text)               # JSON: 快速通道跳过的章节ID列表
+    category_id = Column(Integer, ForeignKey("categories.id"))
+    category = relationship("Category", back_populates="textbooks")
+    status = Column(String(20), default=None)
+    source_file_type = Column(String(20), default=None)
+    parse_version = Column(Integer, default=None)
+    total_nodes = Column(Integer, default=0)
+    updated_at = Column(DateTime, default=utcnow(), onupdate=utcnow())
+    llm_enabled = Column(Boolean, default=False)
+
+    created_at = Column(DateTime, default=utcnow())
+    updated_at = Column(DateTime, default=utcnow(), onupdate=utcnow())
+
+# ═══════════════════════════════════════════════
+# V7 架构 - 多类别统一平台
+# ═══════════════════════════════════════════════
+
+class Category(Base):
+    __tablename__ = "categories"
+    id = Column(Integer, primary_key=True, index=True)
+    code = Column(String(30), unique=True, nullable=False)
+    name = Column(String(100), nullable=False)
+    icon = Column(String(50))
+    sort_order = Column(Integer, default=0)
+    is_active = Column(Boolean, default=True)
+    terminology_config = Column(JSON, default=dict)
+    category_id = Column(Integer, ForeignKey("categories.id"))
+    category = relationship("Category", back_populates="textbooks")
+    status = Column(String(20), default=None)
+    source_file_type = Column(String(20), default=None)
+    parse_version = Column(Integer, default=None)
+    total_nodes = Column(Integer, default=0)
+    updated_at = Column(DateTime, default=utcnow(), onupdate=utcnow())
+    llm_enabled = Column(Boolean, default=False)
+
+    created_at = Column(DateTime, default=utcnow())
+    updated_at = Column(DateTime, default=utcnow(), onupdate=utcnow())
+    courses = relationship("Course", back_populates="category")
+    textbooks = relationship("Textbook", back_populates="category")
+
+class Course(Base):
+    __tablename__ = "courses"
+    id = Column(Integer, primary_key=True, index=True)
+    category_id = Column(Integer, ForeignKey("categories.id"))
+    code = Column(String(30), nullable=False)
+    name = Column(String(200), nullable=False)
+    description = Column(Text)
+    level = Column(String(20), default="beginner")
+    duration_days = Column(Integer)
+    sort_order = Column(Integer, default=0)
+    is_active = Column(Boolean, default=True)
+    category_id = Column(Integer, ForeignKey("categories.id"))
+    category = relationship("Category", back_populates="textbooks")
+    status = Column(String(20), default=None)
+    source_file_type = Column(String(20), default=None)
+    parse_version = Column(Integer, default=None)
+    total_nodes = Column(Integer, default=0)
+    updated_at = Column(DateTime, default=utcnow(), onupdate=utcnow())
+    llm_enabled = Column(Boolean, default=False)
+
+    created_at = Column(DateTime, default=utcnow())
+    updated_at = Column(DateTime, default=utcnow(), onupdate=utcnow())
+    category = relationship("Category", back_populates="courses")
+    class_links = relationship("ClassCourse", back_populates="course")
+
+class ContentNode(Base):
+    __tablename__ = "content_nodes"
+    id = Column(Integer, primary_key=True, index=True)
+    textbook_id = Column(Integer, ForeignKey("textbooks.id", ondelete="CASCADE"))
+    parent_id = Column(Integer, ForeignKey("content_nodes.id", ondelete="CASCADE"))
+    tree_path = Column(Text)
+    sort_order = Column(Integer, default=0)
+    depth = Column(Integer, default=0)
+    node_type = Column(String(30), nullable=False)
+    title = Column(String(500))
+    content = Column(Text)
+    rich_content = Column(JSON)
+    media_url = Column(String(500))
+    media_type = Column(String(20))
+    media_duration = Column(Integer)
+    keywords = Column(ARRAY(Text))
+    is_important = Column(Boolean, default=False)
+    is_visible = Column(Boolean, default=True)
+    is_auto_generated = Column(Boolean, default=False)
+    estimated_time = Column(Integer, default=0)
+    has_quiz = Column(Boolean, default=False)
+    parse_version = Column(Integer, default=0)
+    is_edited = Column(Boolean, default=False)
+    page_start = Column(Integer)
+    page_end = Column(Integer)
+    difficulty_level = Column(String(20), default='medium')
+    learning_objectives = Column(JSON, default=list)
+    tags = Column(ARRAY(Text), default=list)
+    source_location = Column(String(500))
+    review_status = Column(String(20), default='draft')
+    content_hash = Column(String(64))
+    prerequisite_ids = Column(ARRAY(Integer), default=list)
+    category_id = Column(Integer, ForeignKey("categories.id"))
+    category = relationship("Category", back_populates="textbooks")
+    status = Column(String(20), default=None)
+    source_file_type = Column(String(20), default=None)
+    parse_version = Column(Integer, default=None)
+    total_nodes = Column(Integer, default=0)
+    updated_at = Column(DateTime, default=utcnow(), onupdate=utcnow())
+    llm_enabled = Column(Boolean, default=False)
+
+    created_at = Column(DateTime, default=utcnow())
+    updated_at = Column(DateTime, default=utcnow(), onupdate=utcnow())
+    children = relationship("ContentNode", back_populates="parent", remote_side=[id], cascade="all, delete-orphan")
+    history = relationship("ContentNodeHistory", back_populates="node", cascade="all, delete-orphan")
+
+class ContentNodeHistory(Base):
+    __tablename__ = "content_node_history"
+    id = Column(Integer, primary_key=True, index=True)
+    node_id = Column(Integer, ForeignKey("content_nodes.id", ondelete="CASCADE"))
+    snapshot = Column(JSON, nullable=False)
+    edited_by = Column(Integer, ForeignKey("users.id"))
+    category_id = Column(Integer, ForeignKey("categories.id"))
+    category = relationship("Category", back_populates="textbooks")
+    status = Column(String(20), default=None)
+    source_file_type = Column(String(20), default=None)
+    parse_version = Column(Integer, default=None)
+    total_nodes = Column(Integer, default=0)
+    updated_at = Column(DateTime, default=utcnow(), onupdate=utcnow())
+    llm_enabled = Column(Boolean, default=False)
+
+    created_at = Column(DateTime, default=utcnow())
+    node = relationship("ContentNode", back_populates="history")
+
+class KeyConcept(Base):
+    __tablename__ = "key_concepts"
+    id = Column(Integer, primary_key=True, index=True)
+    textbook_id = Column(Integer, ForeignKey("textbooks.id", ondelete="CASCADE"))
+    node_id = Column(Integer, ForeignKey("content_nodes.id", ondelete="CASCADE"))
+    name = Column(String(200), nullable=False)
+    definition = Column(Text)
+    source_text = Column(Text)
+    category_id = Column(Integer, ForeignKey("categories.id"))
+    category = relationship("Category", back_populates="textbooks")
+    status = Column(String(20), default=None)
+    source_file_type = Column(String(20), default=None)
+    parse_version = Column(Integer, default=None)
+    total_nodes = Column(Integer, default=0)
+    updated_at = Column(DateTime, default=utcnow(), onupdate=utcnow())
+    llm_enabled = Column(Boolean, default=False)
+
+    created_at = Column(DateTime, default=utcnow())
+
+class ClassCourse(Base):
+    __tablename__ = "class_courses"
+    id = Column(Integer, primary_key=True, index=True)
+    class_id = Column(Integer, ForeignKey("classes.id", ondelete="CASCADE"))
+    course_id = Column(Integer, ForeignKey("courses.id", ondelete="CASCADE"))
+    __table_args__ = (UniqueConstraint("class_id", "course_id"),)
+    cls = relationship("Class")
+    course = relationship("Course", back_populates="class_links")
