@@ -31,7 +31,7 @@ def _sanitize_errors(errors: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return sanitized
 
 
-class APIException(Exception):
+class APIError(Exception):
     """自定义 API 异常"""
     def __init__(self, status_code: int, message: str, detail: str = None):
         self.status_code = status_code
@@ -42,8 +42,8 @@ class APIException(Exception):
 def setup_error_handlers(app: FastAPI):
     """设置错误处理器"""
 
-    @app.exception_handler(APIException)
-    async def api_exception_handler(request: Request, exc: APIException):
+    @app.exception_handler(APIError)
+    async def api_exception_handler(request: Request, exc: APIError):
         """处理自定义 API 异常"""
         logger.error(f"API Error: {exc.message}", extra={
             "status_code": exc.status_code,

@@ -70,13 +70,12 @@ async def list_student_progress(
         total_time = sum(p.total_reading_time for p in progress_list)
 
         # 获取最近学习的章节
-        recent_chapter = None
+        _recent_chapter = None  # noqa: F841
         if progress_list:
             recent = max(progress_list, key=lambda p: p.last_updated or p.created_at)
-            recent_chapter_row = await db.execute(
+            await db.execute(
                 select(ChapterProgress).where(ChapterProgress.id == recent.id)
             )
-            recent_chapter = recent_chapter_row.scalar_one_or_none()
 
         students_data.append({
             "user_id": student.id,

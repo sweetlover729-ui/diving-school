@@ -252,9 +252,6 @@ class DocumentParser:
         """检测日期字段"""
         fields = []
         # 模式: 年    月    日
-        pattern = r'(\d{4}|公元\s*\d{4}|)\s*年\s*\d{1,2}\s*月\s*\d{1,2}\s*日'
-        matches = re.finditer(pattern, self.full_text)
-
         # 查找日期标签
         date_labels = ['日期', '签署日期', '填写日期', '培训日期', '开始日期', '结束日期']
         for label in date_labels:

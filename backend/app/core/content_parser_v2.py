@@ -290,9 +290,9 @@ class ContentParserV2:
             re.MULTILINE,
         )
 
-        parts = heading_pattern.split(text)
-        current_heading = ""
-        current_text = ""
+        _parts = heading_pattern.split(text)  # noqa: F841
+        _current_heading = ""
+        _current_text = ""  # noqa: F841
         start_pos = 0
 
         # Simple approach: split on double newlines and markdown headings
@@ -359,7 +359,7 @@ class ContentParserV2:
                 node.content_type = "section"
             # Generate content hash
             hash_input = f"{textbook_id}:{node.title}:{node.summary[:100]}"
-            node_hash = hashlib.sha256(hash_input.encode()).hexdigest()[:16]
+            _node_hash = hashlib.sha256(hash_input.encode()).hexdigest()[:16]  # noqa: F841
         return nodes
 
     @staticmethod

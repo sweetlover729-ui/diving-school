@@ -463,7 +463,7 @@ async def remove_class_member(
     user: User = Depends(require_admin)
 ):
     """Remove Class Member"""
-    result = await db.execute(
+    await db.execute(
         sql_text("DELETE FROM class_members WHERE id = :mid AND class_id = :cid"),
         {"mid": member_id, "cid": class_id}
     )

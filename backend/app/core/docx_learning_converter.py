@@ -125,9 +125,9 @@ class DocxToLearningConverter:
 
             # 检测标题级别
             level = 0
-            pStyle = paragraph.find('.//w:pStyle', self.NS)
-            if pStyle is not None:
-                style_val = pStyle.get('{http://schemas.openxmlformats.org/wordprocessingml/2006/main}val', '')
+            p_style = paragraph.find('.//w:pStyle', self.NS)
+            if p_style is not None:
+                style_val = p_style.get('{http://schemas.openxmlformats.org/wordprocessingml/2006/main}val', '')
                 if 'Heading' in style_val:
                     try:
                         level = int(style_val.replace('Heading', ''))

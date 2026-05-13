@@ -678,7 +678,7 @@ class TextbookEditor:
                 self._save()
                 return True
         return False
-    def unhide_section(self, section_id: str) -> bool:
+    def unhide_section(self, section_id: str) -> bool:  # noqa: F811
         """取消隐藏章节"""
         for section in self.data['sections']:
             if section['id'] == section_id:
@@ -688,7 +688,7 @@ class TextbookEditor:
                 return True
         return False
 
-    def update_section(self, section_id: str, updates: dict) -> bool:
+    def update_section(self, section_id: str, updates: dict) -> bool:  # noqa: F811
         """更新章节"""
         self._persist_undo()
         for section in self.data['sections']:
@@ -737,7 +737,7 @@ class TextbookEditor:
             return True
         return False
 
-    def delete_section(self, section_id: str) -> bool:
+    def delete_section(self, section_id: str) -> bool:  # noqa: F811
         """删除章节"""
         original_len = len(self.data['sections'])
         self.data['sections'] = [s for s in self.data['sections'] if s['id'] != section_id]

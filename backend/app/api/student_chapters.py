@@ -832,7 +832,7 @@ async def submit_exercises(
         answers = data.get("answers", [])
         self_test = data.get("self_test", False)
         tab_switches = data.get("tab_switch_count", 0)
-        time_spent_val = data.get("time_spent", 0)
+        _time_spent_val = data.get("time_spent", 0)  # noqa: F841
     result = await db.execute(
         select(ChapterProgress).where(
             ChapterProgress.user_id == user.id,

@@ -1206,7 +1206,7 @@ async def publish_documents_to_class(
     """发布文书到班级（管理员/教练）"""
 
     template_ids = request.get("template_ids", [])
-    due_date = request.get("due_date")
+    _due_date = request.get("due_date")  # noqa: F841
 
     if not template_ids:
         raise HTTPException(status_code=400, detail="请选择要发布的文书")

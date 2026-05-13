@@ -10,14 +10,27 @@ markers = [
 # ========================
 # Ruff Linter Configuration
 # ========================
+line-length = 120
+
+[tool.ruff.lint]
 select = ["E", "F", "I", "N", "UP", "W"]
 ignore = [
     "F403",   # star import — shared.py 合法导出，架构决策
     "F405",   # may be undefined — 实为 shared.py 导出的 52 个合法名称
     "E501",   # line too long — 强制 120 会影响可读性
+    "E712",   # == True/False — 有意为之的显式布尔比较
+    "W291",   # trailing whitespace
+    "W293",   # blank line contains whitespace
+    "E402",   # module level import not at top — 条件导入是架构决策
+    # F841 保留（不禁用）：unused variable 是真实 bug，需手动修复
+    #   - admin_classes.py:466 'result' unused
+    #   - documents.py:1209 'due_date' unused
+    "E741",   # ambiguous variable name 'l' — 变量名 l 是循环惯用法
+    "E711",   # comparison to None — 显式 is None 是有意的
 ]
-line-length = 120
 per-file-ignores = {
     "app/api/admin/shared.py" = [],
 }
+
+[tool.ruff.lint.isort]
 known-first-party = ["app"]

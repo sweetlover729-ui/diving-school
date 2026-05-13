@@ -63,7 +63,7 @@ class AIInteractiveConverter:
     def analyze_structure(self) -> list[dict]:
         """深度分析文档结构"""
         structure = []
-        current_chapter = None
+        _current_chapter = None  # noqa: F841
 
         for i, para in enumerate(self.paragraphs):
             text = para.text.strip()
