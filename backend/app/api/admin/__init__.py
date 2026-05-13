@@ -5,6 +5,8 @@
 注意: 共享导入/依赖/Schema 见 shared.py
       端点定义见 admin_*.py 各子模块
 """
+from fastapi import APIRouter
+
 from .admin_announcements import router as announcements_router
 from .admin_categories import router as categories_router
 from .admin_class_courses import router as class_courses_router
