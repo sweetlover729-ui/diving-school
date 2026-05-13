@@ -83,6 +83,8 @@ jobs:
               await engine.dispose()
           asyncio.run(init())
           " && echo "✅ Tables created"
+      - name: Create static directory
+        run: mkdir -p static
       - name: Run tests with 100% coverage enforcement
         env:
           DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/diving_test
@@ -224,6 +226,7 @@ jobs:
               await engine.dispose()
           asyncio.run(init())
           "
+          mkdir -p static
           .venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000 &
           sleep 5
           curl -sf http://localhost:8000/health && echo " ✅ Server up"
