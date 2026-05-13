@@ -5,12 +5,13 @@
 
 from datetime import datetime, timedelta
 
+import bcrypt
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from sqlalchemy import select, sql_text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.models.class_system import Class
+from app.models.class_system import Class, ClassMember, ClassStatus
 
 from .shared import *
 

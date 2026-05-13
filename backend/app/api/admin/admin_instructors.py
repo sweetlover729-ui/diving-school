@@ -3,10 +3,13 @@
 """
 
 
+import bcrypt
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
+from app.models.class_system import Class, ClassMember
 
 from .shared import *
 
