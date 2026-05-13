@@ -2,6 +2,8 @@
 管理员-教材预览
 """
 
+from fastapi import APIRouter
+
 from .shared import *
 
 router = APIRouter(prefix="", tags=["管理员-教材预览"])

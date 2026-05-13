@@ -1,6 +1,8 @@
 """
 管理员-学习路径 / 跨班对比
 """
+from fastapi import APIRouter
+
 from app.models.class_system import (
     ChapterProgress,
     ChapterProgressStatus,

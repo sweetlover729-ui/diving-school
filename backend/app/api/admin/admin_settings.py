@@ -2,6 +2,8 @@
 管理员-系统设置 / 预警规则 / 审计日志
 """
 
+from fastapi import APIRouter
+
 from app.models.class_system import Question
 
 from .shared import *
