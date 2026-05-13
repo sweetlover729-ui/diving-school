@@ -28,9 +28,9 @@ ignore = [
     "E741",   # ambiguous variable name 'l' — 变量名 l 是循环惯用法
     "E711",   # comparison to None — 显式 is None 是有意的
 ]
-per-file-ignores = {
-    "app/api/admin/shared.py" = [],
-}
+
+[tool.ruff.lint.per-file-ignores]
+"app/api/admin/shared.py" = []
 
 [tool.ruff.lint.isort]
 known-first-party = ["app"]
