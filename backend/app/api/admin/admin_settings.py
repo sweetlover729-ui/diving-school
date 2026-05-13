@@ -6,11 +6,11 @@
 from datetime import datetime
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.models.class_system import Question
+from app.models.class_system import Class, Question
 
 from .shared import *
 
