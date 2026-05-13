@@ -2,6 +2,7 @@
 管理员-教材预览
 """
 
+
 from fastapi import APIRouter
 
 from app.core.database import get_db
@@ -18,7 +19,7 @@ router = APIRouter(prefix="", tags=["管理员-教材预览"])
 
 @router.get("/textbook-preview/chapters")
 async def admin_textbook_preview_chapters(
-    textbook_id: Optional[int] = None,
+    textbook_id: int | None = None,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_admin)
 ):

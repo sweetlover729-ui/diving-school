@@ -1,6 +1,7 @@
 """
 管理员-学习路径 / 跨班对比
 """
+
 from fastapi import APIRouter
 
 from app.core.database import get_db
@@ -26,7 +27,7 @@ router = APIRouter(prefix="", tags=["管理员-学习路径与对比"])
 
 @router.get("/learning-paths")
 async def list_learning_paths(
-    class_id: Optional[int] = Query(None),
+    class_id: int | None = Query(None),
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_admin)
 ):
@@ -55,7 +56,7 @@ async def list_learning_paths(
 
 @router.get("/comparison")
 async def cross_class_comparison(
-    class_ids: Optional[str] = Query(None, description="逗号分隔的班级ID列表"),
+    class_ids: str | None = Query(None, description="逗号分隔的班级ID列表"),
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_admin)
 ):

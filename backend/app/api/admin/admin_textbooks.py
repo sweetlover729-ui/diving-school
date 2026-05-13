@@ -2,6 +2,7 @@
 管理员-教材管理
 """
 
+
 from fastapi import APIRouter
 
 from app.core.database import get_db
@@ -105,11 +106,11 @@ async def get_textbook_detail(
 @router.put("/textbooks/{textbook_id}")
 async def update_textbook(
     textbook_id: int,
-    name: Optional[str] = Body(None),
-    description: Optional[str] = Body(None),
-    total_chapters: Optional[int] = Body(None),
-    total_pages: Optional[int] = Body(None),
-    is_active: Optional[bool] = Body(None),
+    name: str | None = Body(None),
+    description: str | None = Body(None),
+    total_chapters: int | None = Body(None),
+    total_pages: int | None = Body(None),
+    is_active: bool | None = Body(None),
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_admin)
 ):
@@ -841,8 +842,8 @@ async def undo_interactive(
 async def update_interactive_section(
     textbook_id: int,
     section_id: str,
-    title: Optional[str] = Body(None),
-    content: Optional[str] = Body(None),
+    title: str | None = Body(None),
+    content: str | None = Body(None),
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_admin)
 ):
@@ -950,10 +951,10 @@ async def unhide_interactive_section(
 async def split_interactive_section(
     textbook_id: int,
     section_id: str = Body(...),
-    upper_content: Optional[str] = Body(None),
-    lower_content: Optional[str] = Body(None),
-    upper_title: Optional[str] = Body(None),
-    lower_title: Optional[str] = Body(None),
+    upper_content: str | None = Body(None),
+    lower_content: str | None = Body(None),
+    upper_title: str | None = Body(None),
+    lower_title: str | None = Body(None),
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_admin)
 ):

@@ -1,6 +1,7 @@
 """
 管理员-公告管理 CRUD
 """
+
 from fastapi import APIRouter, Query
 
 from app.core.database import get_db
@@ -13,7 +14,7 @@ router = APIRouter(prefix="", tags=["管理员-公告管理"])
 
 @router.get("/announcements")
 async def list_announcements(
-    class_id: Optional[int] = Query(None),
+    class_id: int | None = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=200),
     db: AsyncSession = Depends(get_db),

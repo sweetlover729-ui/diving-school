@@ -2,6 +2,7 @@
 管理员-班级管理
 """
 
+
 from fastapi import APIRouter
 
 from app.core.database import get_db
@@ -18,7 +19,7 @@ router = APIRouter(prefix="", tags=["管理员-班级管理"])
 
 @router.get("/classes")
 async def list_classes(
-    status: Optional[str] = None,
+    status: str | None = None,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_admin)
 ):
@@ -344,7 +345,7 @@ async def end_class(
 @router.get("/classes/{class_id}/members")
 async def list_class_members(
     class_id: int,
-    role: Optional[str] = None,
+    role: str | None = None,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_admin)
 ):
@@ -368,10 +369,10 @@ async def list_class_members(
 
 class AddMemberRequest(BaseModel):
     """添加班级成员请求 - 支持选择已有用户或创建新用户"""
-    user_id: Optional[int] = None   # 有值=选已有用户；无值=创建新用户
-    name: Optional[str] = None
-    id_card: Optional[str] = None
-    phone: Optional[str] = ""
+    user_id: int | None = None   # 有值=选已有用户；无值=创建新用户
+    name: str | None = None
+    id_card: str | None = None
+    phone: str | None = ""
     role: str = "student"
 
 

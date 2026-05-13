@@ -2,6 +2,7 @@
 管理员-学员管理
 """
 
+
 from fastapi import APIRouter
 
 from app.core.database import get_db
@@ -18,7 +19,7 @@ router = APIRouter(prefix="", tags=["管理员-学员管理"])
 
 @router.get("/people")
 async def list_people(
-    role: Optional[str] = None,
+    role: str | None = None,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_admin)
 ):

@@ -2,6 +2,7 @@
 管理员-系统设置 / 预警规则 / 审计日志
 """
 
+
 from fastapi import APIRouter
 
 from app.core.database import get_db
@@ -165,8 +166,8 @@ async def delete_alert_rule(
 async def list_audit_logs(
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
-    action: Optional[str] = Query(None),
-    user_name: Optional[str] = Query(None),
+    action: str | None = Query(None),
+    user_name: str | None = Query(None),
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_admin)
 ):
@@ -254,9 +255,9 @@ async def admin_dashboard(
 
 @router.get("/alert-records")
 async def list_alert_records(
-    class_id: Optional[int] = Query(None),
-    severity: Optional[str] = Query(None),
-    is_read: Optional[bool] = Query(None),
+    class_id: int | None = Query(None),
+    severity: str | None = Query(None),
+    is_read: bool | None = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
