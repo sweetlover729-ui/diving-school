@@ -31,7 +31,7 @@ jobs:
       - name: Ruff lint
         run: .venv/bin/ruff check app/ --output-format=github
       - name: Mypy type check
-        run: .venv/bin/mypy app/ --ignore-missing-imports --no-error-summary --disable-error-code=var-annotated,return-value,misc,operator,union-attr,index,call-overload,typeddict-unknown-key,no-redef,assignment,arg-type,name-defined,attr-defined
+        run: .venv/bin/mypy app/ --ignore-missing-imports --no-error-summary --disable-error-code var-annotated --disable-error-code return-value --disable-error-code misc --disable-error-code operator --disable-error-code union-attr --disable-error-code index --disable-error-code call-overload --disable-error-code typeddict-unknown-key --disable-error-code no-redef --disable-error-code assignment --disable-error-code arg-type --disable-error-code name-defined --disable-error-code attr-defined
 
   # ═══════════════════════════════════════════════
   #  BACKEND — Unit Tests + Coverage (100%)
