@@ -8,7 +8,7 @@ from sqlalchemy import text as sql_text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.models.company import Company
+from app.models.class_system import Company
 
 from .shared import *
 
