@@ -2,14 +2,27 @@
 数据模型单元测试
 覆盖：User, Class, ClassMember, Textbook, Chapter, Question, Test, TestResult
 """
-import pytest
 import json
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
+
+import pytest
+
 from app.models.class_system import (
-    User, UserRole, Class, ClassMember, ClassStatus,
-    Textbook, Chapter, Question, QuestionType,
-    Test as TestModel, TestType, TestStatus, TestResult,
+    Chapter,
+    Class,
+    ClassMember,
+    ClassStatus,
     Company,
+    Question,
+    QuestionType,
+    TestStatus,
+    TestType,
+    Textbook,
+    User,
+    UserRole,
+)
+from app.models.class_system import (
+    Test as TestModel,
 )
 
 
@@ -56,7 +69,7 @@ class TestUserModel:
             db_session.add(user)
         await db_session.flush()
 
-        from sqlalchemy import select, func
+        from sqlalchemy import func, select
         result = await db_session.execute(select(func.count()).select_from(User))
         assert result.scalar() == 4
 
@@ -207,7 +220,7 @@ class TestClassMemberModel:
         await db_session.delete(active_class)
         await db_session.flush()
 
-        from sqlalchemy import select, func
+        from sqlalchemy import func, select
         result = await db_session.execute(
             select(func.count()).select_from(ClassMember).where(ClassMember.class_id == active_class.id)
         )
@@ -302,7 +315,6 @@ class TestQuestionModel:
             options='["约340m/s", "约1500m/s", "约3000m/s", "约500m/s"]',
             answer='["约1500m/s"]',
             difficulty=2,
-            created_by=admin_user.id,
         )
         db_session.add(q)
         await db_session.flush()
@@ -320,7 +332,6 @@ class TestQuestionModel:
             options='["正确", "错误"]',
             answer='["正确"]',
             difficulty=1,
-            created_by=admin_user.id,
         )
         db_session.add(q)
         await db_session.flush()
@@ -336,12 +347,11 @@ class TestQuestionModel:
                 content=f"测试题-{qt.value}",
                 options='["A", "B", "C", "D"]',
                 answer='["A"]',
-                created_by=admin_user.id,
             )
             db_session.add(q)
         await db_session.flush()
 
-        from sqlalchemy import select, func
+        from sqlalchemy import func, select
         result = await db_session.execute(select(func.count()).select_from(Question))
         assert result.scalar() == 4
 
