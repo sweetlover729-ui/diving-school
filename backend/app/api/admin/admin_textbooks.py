@@ -3,6 +3,7 @@
 """
 
 
+
 from fastapi import APIRouter, Body, Depends, File, HTTPException, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -478,7 +479,7 @@ async def get_page_management(
 @router.put("/textbooks/{textbook_id}/pages/visibility")
 async def update_page_visibility(
     textbook_id: int,
-    page_ids: List[int] = Body(...),
+    page_ids: list[int] = Body(...),
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_admin)
 ):
@@ -1002,7 +1003,7 @@ async def split_interactive_section(
 @router.post("/textbooks/{textbook_id}/interactive/sections/merge")
 async def merge_interactive_sections(
     textbook_id: int,
-    section_ids: List[str] = Body(...),
+    section_ids: list[str] = Body(...),
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_admin)
 ):
@@ -1041,7 +1042,7 @@ async def merge_interactive_sections(
 @router.post("/textbooks/{textbook_id}/interactive/sections/reorder")
 async def reorder_interactive_sections(
     textbook_id: int,
-    section_ids: List[str] = Body(...),
+    section_ids: list[str] = Body(...),
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_admin)
 ):
@@ -1182,7 +1183,7 @@ async def unhide_interactive_unit(
 @router.post("/textbooks/{textbook_id}/interactive/units/delete")
 async def delete_interactive_units_batch(
     textbook_id: int,
-    unit_ids: List[str] = Body(...),
+    unit_ids: list[str] = Body(...),
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_admin)
 ):
@@ -1206,7 +1207,7 @@ async def delete_interactive_units_batch(
 @router.post("/textbooks/{textbook_id}/interactive/units/merge")
 async def merge_interactive_units(
     textbook_id: int,
-    unit_ids: List[str] = Body(...),
+    unit_ids: list[str] = Body(...),
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_admin)
 ):

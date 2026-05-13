@@ -43,7 +43,7 @@ async def get_settings_alias(
 
 @router.put("/settings")
 async def update_settings_alias(
-    settings_data: Dict = Body(...),
+    settings_data: dict = Body(...),
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_admin)
 ):
@@ -63,7 +63,7 @@ async def update_settings_alias(
 
 @router.put("/system-settings")
 async def update_system_settings(
-    settings_data: Dict = Body(...),
+    settings_data: dict = Body(...),
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_admin)
 ):
