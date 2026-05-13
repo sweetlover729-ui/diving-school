@@ -2,12 +2,15 @@
 DOCX 文书自动解析器
 自动识别表单字段，生成 fields_schema
 """
-import zipfile
-import xml.etree.ElementTree as ET
-import re
 import json
-from typing import List, Dict, Any
-from dataclasses import dataclass, asdict
+import logging
+import re
+import xml.etree.ElementTree as ET
+import zipfile
+from dataclasses import asdict, dataclass
+from typing import Any
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -18,7 +21,7 @@ class FormField:
     label: str
     question: str = ""
     required: bool = True
-    options: List[str] = None
+    options: list[str] = None
     placeholder: str = ""
     # 自动填充配置
     auto_fill: str = ""  # student_name, student_phone, student_id_card, etc.
@@ -27,13 +30,13 @@ class FormField:
 
 class DocumentParser:
     """DOCX 文档解析器"""
-    
+
     # 命名空间
     NS = {
         'w': 'http://schemas.openxmlformats.org/wordprocessingml/2006/main',
         'wp': 'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing',
     }
-    
+
     # 自动填充字段映射
     AUTO_FILL_MAP = {
         '姓名': 'student_name',
@@ -60,20 +63,20 @@ class DocumentParser:
         '紧急联络人': 'emergency_contact',
         '紧急联系人': 'emergency_contact',
     }
-    
+
     def __init__(self, docx_path: str):
         self.docx_path = docx_path
         self.full_text = ""
         self.paragraphs = []
-        
-    def parse(self) -> List[FormField]:
+
+    def parse(self) -> list[FormField]:
         """解析 DOCX 文件，返回表单字段列表"""
         # 读取文档内容
         self._extract_text()
-        
+
         fields = []
         field_id = 0
-        
+
         # 1. 识别文本填空字段（冒号+空格模式）
         text_fields = self._detect_text_fields()
         for label, context in text_fields:
@@ -88,7 +91,7 @@ class DocumentParser:
                 auto_fill=auto_fill,
                 editable=(auto_fill not in ['student_name', 'student_id_card'])  # 姓名和身份证不可修改
             ))
-        
+
         # 2. 识别有/无单选
         yes_no_fields = self._detect_yes_no_fields()
         for label, context in yes_no_fields:
@@ -101,7 +104,7 @@ class DocumentParser:
                 required=True,
                 options=["有", "无"]
             ))
-        
+
         # 3. 识别选项单选（A/B/C 或 初中/高中/大专）
         choice_fields = self._detect_choice_fields()
         for label, options, context in choice_fields:
@@ -114,7 +117,7 @@ class DocumentParser:
                 required=True,
                 options=options
             ))
-        
+
         # 4. 识别签名字段
         signature_fields = self._detect_signature_fields()
         for label, context in signature_fields:
@@ -126,7 +129,7 @@ class DocumentParser:
                 question=context,
                 required=True
             ))
-        
+
         # 5. 识别日期字段
         date_fields = self._detect_date_fields()
         for label, context in date_fields:
@@ -140,16 +143,16 @@ class DocumentParser:
                 required=True,
                 auto_fill=auto_fill
             ))
-        
+
         return fields
-    
+
     def _extract_text(self):
         """提取文档文本，保留段落结构"""
         with zipfile.ZipFile(self.docx_path, 'r') as z:
             xml_content = z.read('word/document.xml')
-        
+
         root = ET.fromstring(xml_content)
-        
+
         # 提取所有段落
         for paragraph in root.findall('.//w:p', self.NS):
             texts = []
@@ -160,13 +163,13 @@ class DocumentParser:
             para_text = ''.join(texts)
             if para_text.strip():
                 self.paragraphs.append(para_text)
-        
+
         self.full_text = '\n'.join(self.paragraphs)
-    
-    def _detect_text_fields(self) -> List[tuple]:
+
+    def _detect_text_fields(self) -> list[tuple]:
         """检测文本填空字段（冒号+空格模式）"""
         fields = []
-        
+
         # 模式1: 字段名：    （冒号+3个以上空格）
         pattern1 = r'([^：:\n]{1,20})[：:]\s{3,}'
         matches = re.finditer(pattern1, self.full_text)
@@ -179,7 +182,7 @@ class DocumentParser:
                 end = min(len(self.full_text), m.end() + 50)
                 context = self.full_text[start:end]
                 fields.append((label, context))
-        
+
         # 模式2: 横线填空 __________
         pattern2 = r'([^_\n]{2,20})[_]{3,}'
         matches = re.finditer(pattern2, self.full_text)
@@ -190,10 +193,10 @@ class DocumentParser:
                 end = min(len(self.full_text), m.end() + 30)
                 context = self.full_text[start:end]
                 fields.append((label, context))
-        
+
         return fields
-    
-    def _detect_yes_no_fields(self) -> List[tuple]:
+
+    def _detect_yes_no_fields(self) -> list[tuple]:
         """检测有/无单选字段"""
         fields = []
         pattern = r'([^。，,\n]{2,30})(?:有\s*[、,]\s*无|是\s*[、,]\s*否)'
@@ -206,11 +209,11 @@ class DocumentParser:
                 context = self.full_text[start:end]
                 fields.append((label, context))
         return fields
-    
-    def _detect_choice_fields(self) -> List[tuple]:
+
+    def _detect_choice_fields(self) -> list[tuple]:
         """检测选项单选字段（A/B/C 或 具体选项）"""
         fields = []
-        
+
         # 模式: 数字开头的问题 + 选项
         # 如: "4、您的教育程度： 初中    中技/高中  大专    本科"
         pattern = r'(\d+[、.．]\s*[^：:\n]{2,20})[：:]\s*((?:[^\s]{2,10}\s+){2,}[^\s]{2,10})'
@@ -225,14 +228,14 @@ class DocumentParser:
                 end = min(len(self.full_text), m.end() + 20)
                 context = self.full_text[start:end]
                 fields.append((label, options, context))
-        
+
         return fields
-    
-    def _detect_signature_fields(self) -> List[tuple]:
+
+    def _detect_signature_fields(self) -> list[tuple]:
         """检测签名字段"""
         fields = []
         keywords = ['签名', '签字', '签署', '学员签名', '教练签名', '监护人签名', '亲属签名']
-        
+
         for keyword in keywords:
             pattern = rf'({keyword}[:：]?\s*)'
             matches = re.finditer(pattern, self.full_text)
@@ -242,16 +245,16 @@ class DocumentParser:
                 end = min(len(self.full_text), m.end() + 30)
                 context = self.full_text[start:end]
                 fields.append((label, context))
-        
+
         return fields
-    
-    def _detect_date_fields(self) -> List[tuple]:
+
+    def _detect_date_fields(self) -> list[tuple]:
         """检测日期字段"""
         fields = []
         # 模式: 年    月    日
         pattern = r'(\d{4}|公元\s*\d{4}|)\s*年\s*\d{1,2}\s*月\s*\d{1,2}\s*日'
         matches = re.finditer(pattern, self.full_text)
-        
+
         # 查找日期标签
         date_labels = ['日期', '签署日期', '填写日期', '培训日期', '开始日期', '结束日期']
         for label in date_labels:
@@ -261,9 +264,9 @@ class DocumentParser:
                 end = min(len(self.full_text), idx + 40)
                 context = self.full_text[start:end]
                 fields.append((label, context))
-        
+
         return fields
-    
+
     def _is_noise(self, text: str) -> bool:
         """判断是否为噪声（非字段内容）"""
         noise_patterns = [
@@ -276,15 +279,15 @@ class DocumentParser:
             if re.match(pattern, text):
                 return True
         return False
-    
+
     def _get_auto_fill_mapping(self, label: str) -> str:
         """获取自动填充映射"""
         for key, value in self.AUTO_FILL_MAP.items():
             if key in label:
                 return value
         return ""
-    
-    def generate_schema(self) -> Dict[str, Any]:
+
+    def generate_schema(self) -> dict[str, Any]:
         """生成完整的 fields_schema"""
         fields = self.parse()
         return {
@@ -293,7 +296,7 @@ class DocumentParser:
             "total_fields": len(fields),
             "fields": [asdict(f) for f in fields]
         }
-    
+
     def save_schema(self, output_path: str):
         """保存 schema 到 JSON 文件"""
         schema = self.generate_schema()
@@ -304,19 +307,19 @@ class DocumentParser:
 
 # 测试代码
 if __name__ == "__main__":
-    import sys
     import os
-    
+    import sys
+
     if len(sys.argv) > 1:
         docx_path = sys.argv[1]
         output_path = sys.argv[2] if len(sys.argv) > 2 else "schema.json"
-        
+
         parser = DocumentParser(docx_path)
         schema = parser.save_schema(output_path)
-        
-        logger.info(f"解析完成！")
+
+        logger.info("解析完成！")
         logger.info(f"总字段数: {schema['total_fields']}")
-        logger.info(f"\n字段列表:")
+        logger.info("\n字段列表:")
         for field in schema['fields']:
             logger.info(f"  [{field['type']}] {field['label']}")
             if field.get('auto_fill'):
@@ -329,7 +332,7 @@ if __name__ == "__main__":
             ('/Users/wjjmac/book/一般免责和风险承担协议书.docx', 'liability_waiver'),
             ('/Users/wjjmac/book/潜水（应急救援）培训学员问卷调查.docx', 'questionnaire'),
         ]
-        
+
         for docx_path, name in docs:
             if os.path.exists(docx_path):
                 logger.info(f"\n{'='*60}")

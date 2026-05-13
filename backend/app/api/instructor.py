@@ -1,27 +1,39 @@
 """
 教练员API - 班级制培训管理系统
 """
+import json
+import random
 from datetime import datetime
-from typing import Optional, List
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-import json
-import random
 
+from app.api.admin.shared import require_instructor
+from app.api.auth_v2 import get_current_class, get_current_user
+from app.api.common_views import (
+    get_analytics_summary,
+    get_class_info,
+    get_progress_overview,
+    get_reading_ranking,
+    get_scores_matrix,
+    get_scores_ranking,
+    get_single_test_scores,
+    get_students_list,
+)
 from app.core.database import get_db
 from app.core.textbook_utils import get_class_textbooks
 from app.models.class_system import (
-    User, Class, Textbook, Question, Test, TestResult,
-    ReadingProgress, UserRole, TestType, TestStatus, QuestionType
-)
-from app.api.auth_v2 import get_current_user, get_current_class
-from app.api.admin.shared import require_instructor
-from app.api.common_views import (
-    get_class_info, get_students_list, get_progress_overview,
-    get_scores_matrix, get_single_test_scores, get_analytics_summary,
-    get_reading_ranking, get_scores_ranking
+    Class,
+    Question,
+    QuestionType,
+    ReadingProgress,
+    Test,
+    TestResult,
+    TestStatus,
+    TestType,
+    User,
 )
 
 router = APIRouter(
@@ -94,16 +106,16 @@ async def list_textbooks(
 class TestCreateRequest(BaseModel):
     title: str
     test_type: str
-    questions: List[int]
-    duration: Optional[int] = None
-    start_time: Optional[datetime] = None
-    end_time: Optional[datetime] = None
+    questions: list[int]
+    duration: int | None = None
+    start_time: datetime | None = None
+    end_time: datetime | None = None
 
 
 class GenerateTestRequest(BaseModel):
-    textbook_id: Optional[int] = None
-    chapter_ids: Optional[List[int]] = None
-    question_types: Optional[List[str]] = None
+    textbook_id: int | None = None
+    chapter_ids: list[int] | None = None
+    question_types: list[str] | None = None
     difficulty_min: int = 1
     difficulty_max: int = 5
     count: int = 20
@@ -111,7 +123,7 @@ class GenerateTestRequest(BaseModel):
 
 @router.get("/tests")
 async def list_tests(
-    test_type: Optional[str] = None,
+    test_type: str | None = None,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
     cls: Class = Depends(get_current_class)
@@ -123,7 +135,7 @@ async def list_tests(
     query = query.order_by(Test.created_at.desc())
     result = await db.execute(query)
     tests = result.scalars().all()
-    
+
     return [
         {
             "id": t.id, "title": t.title, "test_type": t.test_type.value,
@@ -176,11 +188,11 @@ async def get_test(
     test = result.scalar_one_or_none()
     if not test:
         raise HTTPException(status_code=404, detail="测验不存在")
-    
+
     question_ids = test.get_question_ids()
     result = await db.execute(select(Question).where(Question.id.in_(question_ids)))
     questions = result.scalars().all()
-    
+
     return {
         "id": test.id, "title": test.title, "test_type": test.test_type.value,
         "total_score": test.total_score, "duration": test.duration,
@@ -232,13 +244,13 @@ async def generate_test(
         query = query.where(Question.question_type.in_(types))
     query = query.where(Question.difficulty >= request.difficulty_min,
                         Question.difficulty <= request.difficulty_max)
-    
+
     result = await db.execute(query)
     all_questions = result.scalars().all()
     if len(all_questions) < request.count:
         raise HTTPException(status_code=400,
             detail=f"题目数量不足，只有 {len(all_questions)} 道符合条件的题目")
-    
+
     selected = random.sample(list(all_questions), request.count)
     return {
         "success": True, "count": len(selected),
@@ -253,8 +265,8 @@ async def generate_test(
 
 @router.get("/questions")
 async def list_questions_for_instructor(
-    textbook_id: Optional[int] = None,
-    question_type: Optional[str] = None,
+    textbook_id: int | None = None,
+    question_type: str | None = None,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
     cls: Class = Depends(get_current_class)
@@ -300,25 +312,25 @@ async def get_student_detail_progress(
     student = result.scalar_one_or_none()
     if not student:
         raise HTTPException(status_code=404, detail="学员不存在")
-    
+
     # 验证学员属于该班级
     result = await db.execute(
         select(ReadingProgress).where(ReadingProgress.user_id == user_id)
     )
     readings = result.scalars().all()
-    
+
     # 成绩详情
     result = await db.execute(
         select(TestResult, Test).join(Test)
         .where(TestResult.user_id == user_id, Test.class_id == cls.id)
     )
     test_results = result.all()
-    
+
     # 获取教材列表用于名称显示
     from app.core.textbook_utils import get_class_textbooks
     textbooks = await get_class_textbooks(db, cls.id)
     text_map = {t.id: t.name for t in textbooks}
-    
+
     return {
         "user_id": student.id,
         "name": student.name,

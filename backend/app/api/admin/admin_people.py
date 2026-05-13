@@ -31,7 +31,7 @@ async def list_people(
         sql += " AND u.role = :role"
         params["role"] = role
     sql += " ORDER BY u.id DESC"
-    
+
     result = await db.execute(sql_text(sql), params)
     return [dict(r._mapping) for r in result.fetchall()]
 
@@ -45,7 +45,7 @@ async def create_person(
     """Create Person"""
     pw = (req.phone or "000000")[-6:]
     pw_hash = bcrypt.hashpw(pw.encode(), bcrypt.gensalt()).decode()
-    
+
     person = User(
         name=req.name, role=UserRole(req.role), phone=req.phone,
         id_card=req.id_card or "", company_id=req.company_id,
@@ -54,7 +54,7 @@ async def create_person(
     db.add(person)
     await db.commit()
     await db.refresh(person)
-    
+
     return {"id": person.id, "name": person.name, "phone": person.phone, "password": pw}
 
 

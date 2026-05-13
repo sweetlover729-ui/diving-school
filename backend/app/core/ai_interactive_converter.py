@@ -3,10 +3,13 @@ AI深度推理互动式教材转换器
 使用大模型进行深度内容理解和结构化
 """
 import json
+import logging
 import re
-from typing import List, Dict, Any, Optional
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass
+
 from docx import Document
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -16,9 +19,9 @@ class LearningUnit:
     type: str  # heading, paragraph, key_concept, quiz_placeholder, summary
     content: str
     level: int = 0
-    keywords: List[str] = None
-    quiz: Dict = None
-    
+    keywords: list[str] = None
+    quiz: dict = None
+
     def __post_init__(self):
         if self.keywords is None:
             self.keywords = []
@@ -30,10 +33,10 @@ class LearningSection:
     id: str
     title: str
     level: int
-    units: List[LearningUnit]
+    units: list[LearningUnit]
     estimated_time: int = 10
-    key_concepts: List[str] = None
-    
+    key_concepts: list[str] = None
+
     def __post_init__(self):
         if self.key_concepts is None:
             self.key_concepts = []
@@ -45,36 +48,36 @@ class InteractiveTextbook:
     id: str
     title: str
     total_sections: int
-    sections: List[LearningSection]
-    key_concepts_map: Dict[str, str]
+    sections: list[LearningSection]
+    key_concepts_map: dict[str, str]
 
 
 class AIInteractiveConverter:
     """AI深度推理互动式转换器"""
-    
+
     def __init__(self, docx_path: str):
         self.docx_path = docx_path
         self.doc = Document(docx_path)
         self.paragraphs = [p for p in self.doc.paragraphs if p.text.strip()]
-        
-    def analyze_structure(self) -> List[Dict]:
+
+    def analyze_structure(self) -> list[dict]:
         """深度分析文档结构"""
         structure = []
         current_chapter = None
-        
+
         for i, para in enumerate(self.paragraphs):
             text = para.text.strip()
             if not text:
                 continue
-                
+
             style = para.style.name if para.style else "Normal"
-            
+
             # 识别标题层级
             level = self._detect_heading_level(text, style)
-            
+
             # 识别内容类型
             content_type = self._detect_content_type(text, level)
-            
+
             item = {
                 'index': i,
                 'text': text,
@@ -85,9 +88,9 @@ class AIInteractiveConverter:
                 'keywords': self._extract_keywords(text)
             }
             structure.append(item)
-            
+
         return structure
-    
+
     def _is_chapter_title(self, text: str) -> bool:
         """判断是否是一级章节标题（严格版，与教材管理导入保持一致）"""
         # 排除含有说明文字的段落
@@ -143,40 +146,40 @@ class AIInteractiveConverter:
             return 2
         elif 'Heading 3' in style:
             return 3
-        
+
         # 使用严格的一级章节检测
         if self._is_chapter_title(text):
             return 1
-        
+
         # 使用严格的二级小节检测
         if self._is_section_title(text):
             return 2
-            
+
         return 0
-    
+
     def _detect_content_type(self, text: str, level: int) -> str:
         """检测内容类型"""
         if level > 0:
             return 'heading'
-        
+
         # 检测关键概念
         if self._is_key_concept(text):
             return 'key_concept'
-        
+
         # 检测列表项
         if text.startswith(('•', '-', '*', '·')):
             return 'list_item'
-        
+
         # 检测注意事项
         if '注意' in text[:10] or '警告' in text[:10] or '提醒' in text[:10]:
             return 'warning'
-        
+
         # 检测定义
         if '是指' in text or '定义为' in text or '概念' in text[:20]:
             return 'definition'
-        
+
         return 'paragraph'
-    
+
     def _is_key_concept(self, text: str) -> bool:
         """判断是否关键概念"""
         key_indicators = [
@@ -185,11 +188,11 @@ class AIInteractiveConverter:
             '必须', '应当', '需要', '要求'
         ]
         return any(indicator in text for indicator in key_indicators)
-    
-    def _extract_keywords(self, text: str) -> List[str]:
+
+    def _extract_keywords(self, text: str) -> list[str]:
         """提取关键词"""
         keywords = []
-        
+
         # 潜水专业术语
         diving_terms = [
             '潜水', '气瓶', '调节器', '面镜', '脚蹼', 'BCD', '浮力',
@@ -197,14 +200,14 @@ class AIInteractiveConverter:
             '入水', '出水', '下潜', '上升', '中性浮力', '配重',
             '呼吸', '供气', '应急', '救援', '急救'
         ]
-        
+
         for term in diving_terms:
             if term in text:
                 keywords.append(term)
-        
+
         return list(set(keywords))[:5]  # 最多5个关键词
-    
-    def _generate_quiz(self, section_title: str, content: str) -> Optional[Dict]:
+
+    def _generate_quiz(self, section_title: str, content: str) -> dict | None:
         """基于内容生成测验题"""
         # 根据章节标题和内容类型生成合适的测验
         quiz_templates = {
@@ -242,7 +245,7 @@ class AIInteractiveConverter:
                 'explanation': '潜伴制度是潜水安全的基本原则，潜水员必须互相照应，确保彼此安全。'
             }
         }
-        
+
         # 根据内容选择测验类型
         if any(word in section_title + content for word in ['器材', '装备', '设备']):
             return quiz_templates['器材']
@@ -250,7 +253,7 @@ class AIInteractiveConverter:
             return quiz_templates['技巧']
         elif any(word in section_title + content for word in ['安全', '风险', '注意']):
             return quiz_templates['安全']
-        
+
         # 默认测验
         return {
             'question': f'学习完"{section_title}"后，以下哪项是正确的？',
@@ -263,26 +266,26 @@ class AIInteractiveConverter:
             'correct': 0,
             'explanation': f'{section_title}是潜水培训的重要内容，潜水员应当认真学习和掌握。'
         }
-    
+
     def convert(self) -> InteractiveTextbook:
         """转换为互动式教材"""
         # 分析结构
         structure = self.analyze_structure()
-        
+
         # 提取标题
         title = "应急救援与公共安全职业潜水员培训教材"
         for item in structure[:10]:
             if item['level'] == 1 and len(item['text']) > 5:
                 title = item['text'][:50]
                 break
-        
+
         # 构建章节
         sections = []
         current_section = None
         section_units = []
         section_id = 0
         all_key_concepts = {}
-        
+
         for i, item in enumerate(structure):
             # 新章节开始
             if item['level'] == 1 or (item['level'] == 2 and not current_section):
@@ -298,7 +301,7 @@ class AIInteractiveConverter:
                             level=0,
                             quiz=quiz
                         ))
-                    
+
                     sections.append(LearningSection(
                         id=str(section_id),
                         title=current_section['title'],
@@ -307,7 +310,7 @@ class AIInteractiveConverter:
                         estimated_time=max(5, len(section_units) * 2),
                         key_concepts=list(set([kw for unit in section_units for kw in unit.keywords]))[:10]
                     ))
-                
+
                 # 开始新章节
                 section_id += 1
                 current_section = {
@@ -322,7 +325,7 @@ class AIInteractiveConverter:
                         level=item['level']
                     )
                 ]
-            
+
             # 子标题
             elif item['level'] == 2 and current_section:
                 section_units.append(LearningUnit(
@@ -331,13 +334,13 @@ class AIInteractiveConverter:
                     content=item['text'],
                     level=item['level']
                 ))
-            
+
             # 内容段落
             elif current_section and len(item['text']) > 10:
                 unit_type = item['type']
                 if unit_type == 'heading':
                     unit_type = 'paragraph'
-                
+
                 section_units.append(LearningUnit(
                     id=f"{section_id}_u{len(section_units)}",
                     type=unit_type,
@@ -345,13 +348,13 @@ class AIInteractiveConverter:
                     level=0,
                     keywords=item['keywords']
                 ))
-                
+
                 # 收集关键概念
                 if item['is_key_concept']:
                     for kw in item['keywords']:
                         if kw not in all_key_concepts:
                             all_key_concepts[kw] = item['text'][:200]
-        
+
         # 保存最后一个章节
         if current_section and section_units:
             quiz = self._generate_quiz(current_section['title'], '')
@@ -363,7 +366,7 @@ class AIInteractiveConverter:
                     level=0,
                     quiz=quiz
                 ))
-            
+
             sections.append(LearningSection(
                 id=str(section_id),
                 title=current_section['title'],
@@ -372,7 +375,7 @@ class AIInteractiveConverter:
                 estimated_time=max(5, len(section_units) * 2),
                 key_concepts=list(set([kw for unit in section_units for kw in unit.keywords]))[:10]
             ))
-        
+
         return InteractiveTextbook(
             id="1",
             title=title,
@@ -380,8 +383,8 @@ class AIInteractiveConverter:
             sections=sections,
             key_concepts_map=all_key_concepts
         )
-    
-    def to_dict(self) -> Dict:
+
+    def to_dict(self) -> dict:
         """转换为字典"""
         textbook = self.convert()
         return {
@@ -411,7 +414,7 @@ class AIInteractiveConverter:
             ],
             'key_concepts_map': textbook.key_concepts_map
         }
-    
+
     def save_json(self, output_path: str):
         """保存为JSON文件"""
         data = self.to_dict()

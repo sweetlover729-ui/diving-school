@@ -4,10 +4,10 @@ LLM Configuration Manager
 - 全局开关 + 课程/教材级开关
 - 模型白名单校验（禁止pro/plus/premium）
 """
-import os
-import re
 import logging
-from typing import Optional, Dict, Any
+import os
+from typing import Any
+
 from cryptography.fernet import Fernet, InvalidToken
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -67,7 +67,7 @@ def validate_model(name: str) -> tuple:
 
 # ── DB operations (raw SQL, no ORM model dependency) ──
 
-async def db_get_setting(db: AsyncSession, key: str) -> Optional[str]:
+async def db_get_setting(db: AsyncSession, key: str) -> str | None:
     r = await db.execute(
         text("SELECT value, is_encrypted FROM system_settings WHERE key = :k"), {"k": key}
     )
@@ -90,7 +90,7 @@ async def db_set_setting(db: AsyncSession, key: str, value: str, encrypted: bool
     )
     await db.commit()
 
-async def db_get_all_config(db: AsyncSession) -> Dict[str, Any]:
+async def db_get_all_config(db: AsyncSession) -> dict[str, Any]:
     """返回所有配置（API Key 已脱敏）"""
     r = await db.execute(text("SELECT key, value, is_encrypted, description FROM system_settings ORDER BY key"))
     result = {}
@@ -109,7 +109,7 @@ async def db_get_all_config(db: AsyncSession) -> Dict[str, Any]:
         result[f"{k}_desc"] = desc
     return result
 
-async def db_get_llm_runtime_config(db: AsyncSession) -> Dict[str, str]:
+async def db_get_llm_runtime_config(db: AsyncSession) -> dict[str, str]:
     """运行时配置（含解密后的完整 key）"""
     keys = ["llm_enabled", "llm_api_key", "llm_base_url",
             "llm_model", "llm_max_tokens", "llm_temperature"]

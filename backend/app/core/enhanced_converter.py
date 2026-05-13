@@ -3,10 +3,13 @@ AI深度推理增强版教材转换器
 支持完整章节识别、智能内容提取、人工精修
 """
 import json
+import logging
 import re
-from typing import List, Dict, Any, Optional
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, field
+
 from docx import Document
+
+logger = logging.getLogger(__name__)
 
 
 def _section_num(section_id: str) -> int:
@@ -22,11 +25,11 @@ class LearningUnit:
     type: str  # heading, paragraph, key_concept, quiz_placeholder, summary, table, list
     content: str
     level: int = 0
-    keywords: List[str] = field(default_factory=list)
-    quiz: Dict = None
+    keywords: list[str] = field(default_factory=list)
+    quiz: dict = None
     is_important: bool = False
     order: int = 0
-    
+
     def __post_init__(self):
         if self.quiz is None:
             self.quiz = {}
@@ -38,13 +41,13 @@ class LearningSection:
     id: str
     title: str
     level: int
-    units: List[LearningUnit] = field(default_factory=list)
+    units: list[LearningUnit] = field(default_factory=list)
     estimated_time: int = 10
-    key_concepts: List[str] = field(default_factory=list)
-    parent_id: Optional[str] = None
+    key_concepts: list[str] = field(default_factory=list)
+    parent_id: str | None = None
     order: int = 0
     is_edited: bool = False  # 是否被人工编辑过
-    
+
     def __post_init__(self):
         if not isinstance(self.units, list):
             self.units = []
@@ -56,11 +59,11 @@ class InteractiveTextbook:
     id: str
     title: str
     total_sections: int
-    sections: List[LearningSection] = field(default_factory=list)
-    key_concepts_map: Dict[str, str] = field(default_factory=dict)
-    metadata: Dict = field(default_factory=dict)  # 元数据
+    sections: list[LearningSection] = field(default_factory=list)
+    key_concepts_map: dict[str, str] = field(default_factory=dict)
+    metadata: dict = field(default_factory=dict)  # 元数据
     editing_version: int = 1  # 编辑版本号
-    
+
     def __post_init__(self):
         if not isinstance(self.sections, list):
             self.sections = []
@@ -75,7 +78,7 @@ class EnhancedAIConverter:
     - 自动生成测验
     - 支持精修导出
     """
-    
+
     # 潜水专业术语词库
     DIVING_TERMS = {
         '器材': ['脚蹼', '面镜', '呼吸管', '调节器', 'BCD', '浮力补偿', '潜水电脑', '气瓶', '配重', '潜水衣', '潜水靴', '手套', '头套', '咬嘴', '备用调节器', '低压管', '高压管', '压力表', '深度计', '指北针'],
@@ -86,30 +89,30 @@ class EnhancedAIConverter:
         '物理': ['压力', '水压', '大气压', '绝对压力', '体积', '密度', '浮力', '正浮力', '负浮力', '中性浮力', '阿基米德原理', '波义尔定律', '亨利定律', ' Dalton定律'],
         '生理': ['呼吸', '血液循环', '气体交换', '氮气吸收', '氮气释放', '血液', '肺部', '耳膜', '鼻窦', '牙齿', '体温', '体温过低', '疲劳', '恐慌', '呼吸急促', '过度换气'],
     }
-    
+
     def __init__(self, docx_path: str):
         self.docx_path = docx_path
         self.doc = Document(docx_path)
         self.paragraphs = [p for p in self.doc.paragraphs if p.text.strip()]
-        
-    def analyze_document(self) -> Dict:
+
+    def analyze_document(self) -> dict:
         """完整分析文档结构"""
         structure = []
         current_h1 = None
         current_h2 = None
         current_h3 = None
         unit_order = 0
-        
+
         for i, para in enumerate(self.paragraphs):
             text = para.text.strip()
             if not text:
                 continue
-            
+
             style = para.style.name if para.style else "Normal"
-            
+
             # 检测标题层级
             level, heading_type = self._detect_heading(text, style)
-            
+
             item = {
                 'index': i,
                 'text': text,
@@ -121,7 +124,7 @@ class EnhancedAIConverter:
                 'keywords': self._extract_keywords(text),
                 'order': unit_order
             }
-            
+
             # 更新层级状态
             if level == 1:
                 current_h1 = text[:80]
@@ -133,14 +136,14 @@ class EnhancedAIConverter:
                 current_h3 = None
             elif level == 3:
                 current_h3 = text[:60]
-            
+
             item['h1'] = current_h1
             item['h2'] = current_h2
             item['h3'] = current_h3
-            
+
             structure.append(item)
             unit_order += 1
-        
+
         return {
             'structure': structure,
             'total_paragraphs': len(self.paragraphs),
@@ -148,7 +151,7 @@ class EnhancedAIConverter:
             'h2_count': len([s for s in structure if s['level'] == 2]),
             'h3_count': len([s for s in structure if s['level'] == 3]),
         }
-    
+
     def _detect_heading(self, text: str, style: str) -> tuple:
         """检测标题层级"""
         # Heading样式
@@ -158,27 +161,27 @@ class EnhancedAIConverter:
             return 2, 'section'
         if 'Heading 3' in style or style == 'toc 3':
             return 3, 'subsection'
-        
+
         # 中文数字标题 (一、二、三...)
         if re.match(r'^[一二三四五六七八九十]+、', text):
             return 1, 'chapter'
         if re.match(r'^\([一二三四五六七八九十]+\)', text):
             return 2, 'section'
-            
+
         # 阿拉伯数字标题
         if re.match(r'^[0-9]+[.．、]\s+[\u4e00-\u9fa5]', text) and len(text) < 80:
             return 2, 'section'
         if re.match(r'^[0-9]+[.．、][0-9]+[.．、]\s*', text) and len(text) < 80:
             return 3, 'subsection'
-            
+
         # 其他数字标题
         if re.match(r'^第[一二三四五六七八九十百千]+[章节课部]', text):
             return 1, 'chapter'
         if re.match(r'^第[一二三四五六七八九十百千]+节', text):
             return 2, 'section'
-            
+
         return 0, None
-    
+
     def _detect_content_type(self, text: str) -> str:
         """检测内容类型"""
         # 关键概念
@@ -197,13 +200,13 @@ class EnhancedAIConverter:
         if len(text) > 100:
             return 'paragraph'
         return 'short_text'
-    
+
     def _is_important(self, text: str) -> bool:
         """判断是否重要"""
         important_keywords = ['必须', '应当', '需要', '重要', '关键', '核心', '危险', '警告', '禁止', '严禁', '原则', '要点', '技巧', '窍门']
         return any(k in text for k in important_keywords)
-    
-    def _extract_keywords(self, text: str) -> List[str]:
+
+    def _extract_keywords(self, text: str) -> list[str]:
         """提取关键词"""
         keywords = []
         for category, terms in self.DIVING_TERMS.items():
@@ -211,19 +214,19 @@ class EnhancedAIConverter:
                 if term in text:
                     keywords.append(term)
         return list(set(keywords))[:8]
-    
+
     # 需要跳过的非教学内容关键词
     SKIP_KEYWORDS = [
         '编写背景', '编写依据', '编写原则', '内容结构', '使用建议',
         '致谢', '前言', '序言', '编者', '目录', '版权', '出版',
         '编写说明', '修订说明', '再版说明',
     ]
-    
+
     def convert(self) -> InteractiveTextbook:
         """转换为互动式教材"""
         analysis = self.analyze_document()
         structure = analysis['structure']
-        
+
         # 提取标题
         title = "应急救援与公共安全潜水员培训教材"
         for item in structure[:10]:
@@ -231,7 +234,7 @@ class EnhancedAIConverter:
                 if not any(kw in item['text'] for kw in self.SKIP_KEYWORDS):
                     title = item['text'][:60]
                     break
-        
+
         # 构建章节 - 分两步：先识别所有一级标题，再决定哪些跳过
         raw_sections = []
         current_section = None
@@ -239,7 +242,7 @@ class EnhancedAIConverter:
         section_id = 0
         all_key_concepts = {}
         unit_id = 0
-        
+
         for i, item in enumerate(structure):
             # 新章节开始
             if item['level'] == 1:
@@ -252,7 +255,7 @@ class EnhancedAIConverter:
                         'units': section_units,
                         'should_skip': any(kw in current_section['title'] for kw in self.SKIP_KEYWORDS)
                     })
-                
+
                 # 开始新章节
                 section_id += 1
                 current_section = {
@@ -261,7 +264,7 @@ class EnhancedAIConverter:
                 }
                 section_units = []
                 unit_id = 0
-            
+
             # 子标题
             elif item['level'] == 2:
                 unit_id += 1
@@ -273,7 +276,7 @@ class EnhancedAIConverter:
                     order=unit_id,
                     keywords=item['keywords']
                 ))
-            
+
             # 子子标题
             elif item['level'] == 3:
                 unit_id += 1
@@ -285,20 +288,20 @@ class EnhancedAIConverter:
                     order=unit_id,
                     keywords=item['keywords']
                 ))
-            
+
             # 内容段落
             elif current_section and len(item['text']) > 20:
                 unit_id += 1
                 unit_type = item['type']
                 if unit_type in ['key_concept', 'warning']:
                     unit_type = 'paragraph'
-                
+
                 # 收集关键概念
                 if item['is_important'] or unit_type == 'key_concept':
                     for kw in item['keywords']:
                         if kw not in all_key_concepts:
                             all_key_concepts[kw] = item['text'][:150]
-                
+
                 section_units.append(LearningUnit(
                     id=f"{section_id}_u{unit_id}",
                     type=unit_type,
@@ -308,7 +311,7 @@ class EnhancedAIConverter:
                     keywords=item['keywords'],
                     is_important=item['is_important']
                 ))
-        
+
         # 保存最后一个章节
         if current_section and section_units:
             raw_sections.append({
@@ -318,7 +321,7 @@ class EnhancedAIConverter:
                 'units': section_units,
                 'should_skip': any(kw in current_section['title'] for kw in self.SKIP_KEYWORDS)
             })
-        
+
         # 对大章节进行拆分（基于h2标题）
         final_sections = []
         for raw in raw_sections:
@@ -335,29 +338,29 @@ class EnhancedAIConverter:
                 final_sections.append(self._create_section(
                     int(raw['id']), raw, raw['units'], all_key_concepts
                 ))
-        
+
         # 删除只有heading没有实质内容的空章节
         final_sections = [
             s for s in final_sections if not (
                 len(s.units) > 0 and all(u.type == 'heading' for u in s.units)
             )
         ]
-        
+
         # 去重重复标题（自动加序号）
-        title_counter: Dict[str, int] = {}
+        title_counter: dict[str, int] = {}
         for s in final_sections:
             title_counter[s.title] = title_counter.get(s.title, 0) + 1
-        seen: Dict[str, int] = {}
+        seen: dict[str, int] = {}
         for s in final_sections:
             if title_counter[s.title] > 1:
                 seen[s.title] = seen.get(s.title, 0) + 1
                 s.title = f"{s.title} ({seen[s.title]})"
-        
+
         # 重新编号
         for i, s in enumerate(final_sections):
             s.id = str(i + 1)
             s.order = i + 1
-        
+
         return InteractiveTextbook(
             id="1",
             title=title,
@@ -374,14 +377,14 @@ class EnhancedAIConverter:
                 'skipped_sections': [s.title for s in final_sections if any(kw in s.title for kw in self.SKIP_KEYWORDS)]
             }
         )
-    
-    def _split_large_section(self, raw_section: Dict, key_concepts: Dict) -> List[LearningSection]:
+
+    def _split_large_section(self, raw_section: dict, key_concepts: dict) -> list[LearningSection]:
         """拆分大章节为子章节"""
         units = raw_section['units']
         sub_sections = []
         current_units = []
         sub_id = 0
-        
+
         for unit in units:
             if unit.level == 2 and current_units:
                 # 遇到h2标题，保存当前子章节
@@ -391,9 +394,9 @@ class EnhancedAIConverter:
                     sub_id, {'title': sub_title, 'level': 2}, current_units, key_concepts
                 ))
                 current_units = []
-            
+
             current_units.append(unit)
-        
+
         # 保存最后一个子章节
         if current_units:
             sub_id += 1
@@ -401,35 +404,35 @@ class EnhancedAIConverter:
             sub_sections.append(self._create_section(
                 sub_id, {'title': sub_title, 'level': 2}, current_units, key_concepts
             ))
-        
+
         # 如果没有h2标题拆分，直接返回原章节
         if len(sub_sections) <= 1:
             return [self._create_section(
                 int(raw_section['id']), raw_section, units, key_concepts
             )]
-        
+
         # 在标题前添加父章节标题（截断过长的子标题）
         for i, ss in enumerate(sub_sections):
             child_title = ss.title[:30] if len(ss.title) > 30 else ss.title
             parent_title = raw_section['title'][:20] if len(raw_section['title']) > 20 else raw_section['title']
             ss.title = f"{parent_title} - {child_title}" if ss.title != raw_section['title'] else ss.title
             ss.parent_id = raw_section['id']
-        
+
         return sub_sections
-    
-    def _create_section(self, section_id: int, section_info: Dict, units: List[LearningUnit], 
-                       key_concepts: Dict) -> LearningSection:
+
+    def _create_section(self, section_id: int, section_info: dict, units: list[LearningUnit],
+                       key_concepts: dict) -> LearningSection:
         """创建章节"""
         # 计算学习时间
         total_words = sum(len(u.content) for u in units)
         estimated_time = max(5, min(60, total_words // 200))
-        
+
         # 提取关键概念
         section_concepts = []
         for u in units:
             section_concepts.extend(u.keywords)
         section_concepts = list(set(section_concepts))[:10]
-        
+
         return LearningSection(
             id=str(section_id),
             title=section_info['title'],
@@ -439,8 +442,8 @@ class EnhancedAIConverter:
             key_concepts=section_concepts,
             order=section_id
         )
-    
-    def to_dict(self) -> Dict:
+
+    def to_dict(self) -> dict:
         """转换为字典"""
         textbook = self.convert()
         return {
@@ -476,7 +479,7 @@ class EnhancedAIConverter:
             'metadata': textbook.metadata,
             'editing_version': textbook.editing_version
         }
-    
+
     def save_json(self, output_path: str):
         """保存为JSON文件"""
         data = self.to_dict()
@@ -496,10 +499,10 @@ class TextbookEditor:
     - 添加/删除单元
     - 调整单元顺序
     """
-    
+
     def __init__(self, json_path: str):
         self.json_path = json_path
-        with open(json_path, 'r', encoding='utf-8') as f:
+        with open(json_path, encoding='utf-8') as f:
             self.data = json.load(f)
         self.editing_version = self.data.get('editing_version', 1)
         # 历史状态从文件加载（持久化）
@@ -552,7 +555,7 @@ class TextbookEditor:
         self._save()
         return True
 
-    def get_history_info(self) -> Dict:
+    def get_history_info(self) -> dict:
         """获取撤销/恢复状态"""
         return {
             'can_undo': '_undo_data' in self.data and self._undo_data is not None,
@@ -587,7 +590,7 @@ class TextbookEditor:
                     return True
         return False
 
-    def delete_units(self, unit_ids: List[str]) -> Dict:
+    def delete_units(self, unit_ids: list[str]) -> dict:
         """批量删除多个单元"""
         deleted = []
         failed = []
@@ -610,7 +613,7 @@ class TextbookEditor:
         self._save()
         return {'deleted': deleted, 'failed': failed, 'count': len(deleted)}
 
-    def update_section(self, section_id: str, updates: Dict) -> bool:
+    def update_section(self, section_id: str, updates: dict) -> bool:
         """更新章节信息"""
         for section in self.data['sections']:
             if section['id'] == section_id:
@@ -633,7 +636,7 @@ class TextbookEditor:
                 return True
         return False
 
-    def get_structure(self) -> Dict:
+    def get_structure(self) -> dict:
         """获取可编辑的结构"""
         return {
             'title': self.data['title'],
@@ -654,7 +657,7 @@ class TextbookEditor:
             'metadata': self.data.get('metadata', {}),
             'editing_version': self.editing_version
         }
-    
+
     def hide_section(self, section_id: str) -> bool:
         """隐藏章节"""
         for section in self.data['sections']:
@@ -684,8 +687,8 @@ class TextbookEditor:
                 self._save()
                 return True
         return False
-    
-    def update_section(self, section_id: str, updates: Dict) -> bool:
+
+    def update_section(self, section_id: str, updates: dict) -> bool:
         """更新章节"""
         self._persist_undo()
         for section in self.data['sections']:
@@ -702,8 +705,8 @@ class TextbookEditor:
                 self._save()
                 return True
         return False
-    
-    def update_unit(self, section_id: str, unit_id: str, updates: Dict) -> bool:
+
+    def update_unit(self, section_id: str, unit_id: str, updates: dict) -> bool:
         """更新单元"""
         for section in self.data['sections']:
             if section['id'] == section_id:
@@ -716,8 +719,8 @@ class TextbookEditor:
                         self._save()
                         return True
         return False
-    
-    def reorder_sections(self, section_ids: List[str]) -> bool:
+
+    def reorder_sections(self, section_ids: list[str]) -> bool:
         """重新排序章节"""
         section_map = {s['id']: s for s in self.data['sections']}
         new_sections = []
@@ -727,13 +730,13 @@ class TextbookEditor:
                 s['order'] = i
                 s['is_edited'] = True
                 new_sections.append(s)
-        
+
         if len(new_sections) == len(section_ids):
             self.data['sections'] = new_sections
             self._save()
             return True
         return False
-    
+
     def delete_section(self, section_id: str) -> bool:
         """删除章节"""
         original_len = len(self.data['sections'])
@@ -742,8 +745,8 @@ class TextbookEditor:
             self._save()
             return True
         return False
-    
-    def merge_sections(self, section_ids: List[str], new_title: str = "合并章节") -> bool:
+
+    def merge_sections(self, section_ids: list[str], new_title: str = "合并章节") -> bool:
         """合并多个章节为一个新章节"""
         self._persist_undo()
         section_map = {s['id']: s for s in self.data['sections']}
@@ -752,15 +755,15 @@ class TextbookEditor:
             if sid not in section_map:
                 return False
             sections_to_merge.append(section_map[sid])
-        
+
         if len(sections_to_merge) < 2:
             return False
-        
+
         # 收集所有单元
         all_units = []
         for s in sections_to_merge:
             all_units.extend(s.get('units', []))
-        
+
         # 创建合并后的新章节
         new_id = str(max(_section_num(s['id']) for s in self.data['sections']) + 1)
         merged_section = {
@@ -775,24 +778,24 @@ class TextbookEditor:
             'is_hidden': False,
             'merged_from': section_ids  # 记录原始章节ID，方便撤销
         }
-        
+
         # 移除原始章节，插入新章节
         self.data['sections'] = [s for s in self.data['sections'] if s['id'] not in section_ids]
         # 按原顺序插入
         insert_idx = min(s['order'] for s in sections_to_merge) - 1
         self.data['sections'].insert(insert_idx, merged_section)
-        
+
         # 重新排序
         self.data['sections'].sort(key=lambda s: s['order'])
         for i, s in enumerate(self.data['sections']):
             s['order'] = i + 1
-        
+
         self._save()
         return True
-    
 
 
-    def merge_units(self, unit_entries: List[Dict], new_title: str = '合并章节') -> Dict:
+
+    def merge_units(self, unit_entries: list[dict], new_title: str = '合并章节') -> dict:
         """合并文字单元。
         - 同章节内合并：只把被勾选的那几个单元的内容拼接，
           第一个选中的单元内容变成合并内容，其他被勾选单元消失。
@@ -803,7 +806,7 @@ class TextbookEditor:
         self._persist_undo()
 
         # 按 section_id 分组选中的 unit_id
-        sections_map: Dict[str, List[Dict]] = {}  # sid -> list of selected unit dicts
+        sections_map: dict[str, list[dict]] = {}  # sid -> list of selected unit dicts
         for entry in unit_entries:
             sid, uid = entry['section_id'], entry['unit_id']
             for section in self.data['sections']:
@@ -917,32 +920,32 @@ class TextbookEditor:
         self._save()
         return {'success': True, 'merged_count': len(all_selected), 'new_section_id': new_id, 'mode': 'new_section', 'insert_order': target_order}
 
-    def split_section(self, section_id: str) -> Optional[List[str]]:
+    def split_section(self, section_id: str) -> list[str] | None:
         """按h2子标题拆分为多个章节"""
         self._persist_undo()
         for section in self.data['sections']:
             if section['id'] != section_id:
                 continue
-            
+
             units = section.get('units', [])
             # 找到所有h2级别的单元作为拆分点
             split_points = []
             for i, u in enumerate(units):
                 if u.get('level') == 2 or u.get('type') == 'heading':
                     split_points.append(i)
-            
+
             if len(split_points) < 2:
                 return None
-            
+
             # 创建新章节
             new_section_ids = []
             for j, start_idx in enumerate(split_points):
                 end_idx = split_points[j + 1] if j + 1 < len(split_points) else len(units)
                 sub_units = units[start_idx:end_idx]
-                
+
                 new_id = str(max(_section_num(s['id']) for s in self.data['sections']) + 1 + j)
                 new_title = sub_units[0].get('content', section['title'])[:60] if sub_units else section['title']
-                
+
                 new_section = {
                     'id': new_id,
                     'title': new_title,
@@ -957,26 +960,26 @@ class TextbookEditor:
                 }
                 self.data['sections'].append(new_section)
                 new_section_ids.append(new_id)
-            
+
             # 删除原章节
             self.data['sections'] = [s for s in self.data['sections'] if s['id'] != section_id]
             self.data['sections'].sort(key=lambda s: s['order'])
             for i, s in enumerate(self.data['sections']):
                 s['order'] = i + 1
-            
+
             self._save()
             return new_section_ids
-        
+
         return None
-    
+
     def manual_split_section(
         self,
         section_id: str,
         upper_content: str,
         lower_content: str,
-        upper_title: Optional[str] = None,
-        lower_title: Optional[str] = None,
-    ) -> Dict:
+        upper_title: str | None = None,
+        lower_title: str | None = None,
+    ) -> dict:
         """人工精细拆分：将章节内容手动分配到上下两部分
         upper_content: 上框文字内容（前半部分）
         lower_content: 下框文字内容（后半部分）
@@ -1057,7 +1060,7 @@ class TextbookEditor:
 
         return {}
 
-    def add_section(self, after_section_id: str, section_data: Dict) -> str:
+    def add_section(self, after_section_id: str, section_data: dict) -> str:
         """添加新章节"""
         self._persist_undo()
         new_id = str(max(_section_num(s['id']) for s in self.data['sections']) + 1)
@@ -1071,7 +1074,7 @@ class TextbookEditor:
             'is_edited': True,
             'units': []
         }
-        
+
         # 插入到指定位置后面
         if after_section_id:
             insert_idx = 0
@@ -1082,10 +1085,10 @@ class TextbookEditor:
             self.data['sections'].insert(insert_idx, new_section)
         else:
             self.data['sections'].append(new_section)
-        
+
         self._save()
         return new_id
-    
+
     def _save(self):
         """保存修改"""
         self.editing_version += 1
@@ -1101,11 +1104,11 @@ if __name__ == "__main__":
         docx_path = sys.argv[1]
         converter = EnhancedAIConverter(docx_path)
         result = converter.convert()
-        
-        logger.info(f"\n=== 转换完成 ===")
+
+        logger.info("\n=== 转换完成 ===")
         logger.info(f"标题: {result.title}")
         logger.info(f"章节数: {result.total_sections}")
         logger.info(f"关键概念: {len(result.key_concepts_map)}")
-        logger.info(f"\n章节列表:")
+        logger.info("\n章节列表:")
         for s in result.sections:
             logger.info(f"  {s.id}. {s.title} ({len(s.units)} 单元)")

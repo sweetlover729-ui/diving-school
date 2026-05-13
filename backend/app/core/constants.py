@@ -47,7 +47,7 @@ class LevelName:
     THREE_STAR = "三级潜水员"
     FOUR_STAR = "四级潜水员"
     FIVE_STAR = "五级潜水员"
-    
+
     @classmethod
     def get_name(cls, level: int) -> str:
         names = ["", cls.ONE_STAR, cls.TWO_STAR, cls.THREE_STAR, cls.FOUR_STAR, cls.FIVE_STAR]

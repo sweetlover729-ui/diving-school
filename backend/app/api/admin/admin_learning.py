@@ -1,11 +1,18 @@
 """
 管理员-学习路径 / 跨班对比
 """
-from .shared import *
 from app.models.class_system import (
-    LearningPath, Class, ClassMember, ChapterProgress, ChapterProgressStatus, 
-    TestResult, UserRole, AlertRecord, Announcement, Test, User
+    ChapterProgress,
+    ChapterProgressStatus,
+    Class,
+    ClassMember,
+    LearningPath,
+    TestResult,
+    User,
+    UserRole,
 )
+
+from .shared import *
 
 router = APIRouter(prefix="", tags=["管理员-学习路径与对比"])
 
@@ -81,7 +88,7 @@ async def cross_class_comparison(
         )).scalar() or 0
         completed_cp = (await db.execute(
             select(func.count()).where(
-                ChapterProgress.class_id == cid, 
+                ChapterProgress.class_id == cid,
                 ChapterProgress.status == ChapterProgressStatus.COMPLETED
             )
         )).scalar() or 0
@@ -93,7 +100,7 @@ async def cross_class_comparison(
         ).subquery()
         avg_score_result = await db.execute(
             select(func.avg(TestResult.score)).where(
-                TestResult.user_id.in_(student_ids_subq), 
+                TestResult.user_id.in_(student_ids_subq),
                 TestResult.score > 0
             )
         )

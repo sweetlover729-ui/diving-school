@@ -1,32 +1,45 @@
 """
 管理干部API - 班级制培训管理系统（只读·含深度分析与导出）
 """
-from datetime import datetime, timezone
-from typing import Optional, List
-from fastapi import APIRouter, Depends, HTTPException, Query, Body
-from fastapi.responses import StreamingResponse
-from sqlalchemy import select, func
-from sqlalchemy.ext.asyncio import AsyncSession
-import io
 import csv
-from openpyxl import Workbook
-from openpyxl.styles import Font, Alignment, Border, Side, PatternFill
+import io
+from datetime import datetime, timezone
 
-from app.core.database import get_db
-from app.core.textbook_utils import get_class_textbooks, get_class_textbook_ids
-from app.models.class_system import (
-    User, Class, ClassMember, Test, TestResult,
-    ReadingProgress, UserRole, TestStatus, ChapterProgress, Announcement,
-    AlertRule, AlertRecord, AuditLog, LearningPath, ClassStatus,
-    ChapterProgressStatus
-)
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
+from fastapi.responses import StreamingResponse
+from openpyxl import Workbook
+from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.api.admin.shared import require_manager
 from app.api.auth_v2 import get_current_user
-from app.models.class_system import UserRole
 from app.api.common_views import (
-    get_class_info, get_students_list, get_progress_overview,
-    get_scores_matrix, get_single_test_scores, get_analytics_summary,
-    get_reading_ranking, get_scores_ranking
+    get_analytics_summary,
+    get_class_info,
+    get_progress_overview,
+    get_reading_ranking,
+    get_scores_matrix,
+    get_scores_ranking,
+    get_single_test_scores,
+    get_students_list,
+)
+from app.core.database import get_db
+from app.models.class_system import (
+    AlertRecord,
+    AlertRule,
+    Announcement,
+    AuditLog,
+    ChapterProgress,
+    ChapterProgressStatus,
+    Class,
+    ClassMember,
+    ClassStatus,
+    ReadingProgress,
+    Test,
+    TestResult,
+    User,
+    UserRole,
 )
 
 router = APIRouter(prefix="/manager", tags=["管理干部"])
@@ -39,7 +52,7 @@ router = APIRouter(prefix="/manager", tags=["管理干部"])
 async def get_manager_class(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
-    class_id: Optional[int] = Query(None, description="指定班级ID，不提供则返回第一个活跃班级")
+    class_id: int | None = Query(None, description="指定班级ID，不提供则返回第一个活跃班级")
 ) -> Class:
     """依赖：获取管理干部可访问的班级（支持跨班查看）"""
     if user.role != UserRole.MANAGER:
@@ -95,7 +108,7 @@ async def get_student_detail(
     student = result.scalar_one_or_none()
     if not student:
         raise HTTPException(status_code=404, detail="学员不存在")
-    
+
     # 验证属于当前班级
     result = await db.execute(
         select(ClassMember).where(
@@ -106,22 +119,22 @@ async def get_student_detail(
     )
     if not result.scalar_one_or_none():
         raise HTTPException(status_code=403, detail="该学员不属于当前班级")
-    
+
     # 阅读进度
     result = await db.execute(
         select(ReadingProgress).where(ReadingProgress.user_id == user_id)
     )
     readings = result.scalars().all()
-    
+
     # 成绩
     result = await db.execute(
         select(TestResult, Test).join(Test)
         .where(TestResult.user_id == user_id, Test.class_id == cls.id)
     )
     test_results = result.all()
-    
+
     avg_score = sum(tr.score for tr, t in test_results if tr.score) / len(test_results) if test_results else 0
-    
+
     return {
         "id": student.id, "name": student.name,
         "id_card": student.id_card, "phone": student.phone,
@@ -231,7 +244,7 @@ async def get_anti_cheat_data(
         .where(ClassMember.class_id == cls.id, ClassMember.role == UserRole.STUDENT)
     )
     rows = result.all()
-    
+
     data = []
     for member, u in rows:
         # 统计该学员所有章节的切标签次数
@@ -244,7 +257,7 @@ async def get_anti_cheat_data(
         )
         tab_records = result.scalars().all()
         total_switches = sum(r.tab_switch_count or 0 for r in tab_records)
-        
+
         if total_switches > 0:
             data.append({
                 "user_id": u.id,
@@ -252,7 +265,7 @@ async def get_anti_cheat_data(
                 "total_switches": total_switches,
                 "affected_chapters": len(tab_records)
             })
-    
+
     # 按切换次数降序排列
     data.sort(key=lambda x: x["total_switches"], reverse=True)
     return {"suspicious": data}
@@ -271,7 +284,7 @@ async def export_students(
 ):
     """导出学员名单（Excel/CSV/JSON）"""
     students = await get_students_list(db, cls, include_progress=True)
-    
+
     if format == "json":
         return {
             "class_name": cls.name, "export_time": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
@@ -282,10 +295,10 @@ async def export_students(
                 for i, s in enumerate(students)
             ]
         }
-    
+
     if format == "xlsx":
         return _export_students_xlsx(cls, students)
-    
+
     # CSV 导出（默认回退）
     output = io.StringIO()
     writer = csv.writer(output)
@@ -295,7 +308,7 @@ async def export_students(
             i + 1, s["name"], s["id_card"], s["phone"],
             s.get("reading_progress", 0), s.get("joined_at", "")
         ])
-    
+
     output.seek(0)
     filename = f"{cls.name}_学员名单_{datetime.now().strftime('%Y%m%d')}.csv"
     return StreamingResponse(
@@ -315,9 +328,9 @@ async def export_scores(
     """导出成绩表（Excel/CSV/JSON）"""
     result = await db.execute(select(Test).where(Test.class_id == cls.id))
     tests = result.scalars().all()
-    
+
     students = await get_students_list(db, cls)
-    
+
     # 构建数据
     scores_data = []
     for s in students:
@@ -332,16 +345,16 @@ async def export_scores(
             tr = result.scalar_one_or_none()
             row[test.title] = tr.score if tr else "-"
         scores_data.append(row)
-    
+
     if format == "json":
         return {
             "class_name": cls.name, "export_time": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
             "tests": [t.title for t in tests], "scores": scores_data
         }
-    
+
     if format == "xlsx":
         return _export_scores_xlsx(cls, tests, scores_data)
-    
+
     # CSV 导出（默认回退）
     output = io.StringIO()
     headers = ["姓名", "身份证号"] + [t.title for t in tests]
@@ -349,7 +362,7 @@ async def export_scores(
     writer.writerow(headers)
     for row in scores_data:
         writer.writerow([row.get(h, "") for h in headers])
-    
+
     output.seek(0)
     filename = f"{cls.name}_成绩表_{datetime.now().strftime('%Y%m%d')}.csv"
     return StreamingResponse(
@@ -396,33 +409,33 @@ def _export_students_xlsx(cls: Class, students: list) -> StreamingResponse:
     wb = Workbook()
     ws = wb.active
     ws.title = "学员名单"
-    
+
     headers = ["序号", "姓名", "身份证号", "手机号", "阅读进度%", "加入时间"]
     ws.append(headers)
     _style_xlsx_header(ws, 1, len(headers))
-    
+
     for i, s in enumerate(students):
         row = [i + 1, s["name"], s["id_card"] or "", s["phone"] or "",
                s.get("reading_progress", 0), s.get("joined_at", "")]
         ws.append(row)
         for col in range(1, len(row) + 1):
             _style_xlsx_cell(ws.cell(row=i + 2, column=col))
-    
+
     # 自动列宽
     for col in ws.columns:
         max_len = max(len(str(cell.value or "")) for cell in col)
         ws.column_dimensions[col[0].column_letter].width = max(max_len + 4, 12)
-    
+
     buf = io.BytesIO()
     wb.save(buf)
     buf.seek(0)
-    
+
     # 文件名：RFC 5987 编码中文，兼容所有浏览器
     raw_name = f"{cls.name}_学员名单_{datetime.now().strftime('%Y%m%d')}.xlsx"
     ascii_name = raw_name.encode('ascii', 'ignore').decode() or 'students.xlsx'
     encoded_name = __import__('urllib.parse', fromlist=['quote']).quote(raw_name)
     disposition = f"attachment; filename={ascii_name}; filename*=UTF-8''{encoded_name}"
-    
+
     return StreamingResponse(
         buf,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -435,14 +448,14 @@ def _export_scores_xlsx(cls: Class, tests: list, scores_data: list) -> Streaming
     wb = Workbook()
     ws = wb.active
     ws.title = "成绩表"
-    
+
     headers = ["姓名", "身份证号"] + [t.title for t in tests]
     ws.append(headers)
     _style_xlsx_header(ws, 1, len(headers))
-    
+
     # 统计行
     stat_row = ["平均分", "", ""] + ["-" for _ in tests]
-    
+
     for i, row_data in enumerate(scores_data):
         row = [row_data.get("姓名", ""), row_data.get("身份证号", "")] + \
               [row_data.get(t.title, "-") for t in tests]
@@ -456,7 +469,7 @@ def _export_scores_xlsx(cls: Class, tests: list, scores_data: list) -> Streaming
                 if stat_row[j + 2] == "-":
                     stat_row[j + 2] = []
                 stat_row[j + 2].append(val)
-    
+
     # 写入平均分行
     for j in range(2, len(stat_row)):
         if isinstance(stat_row[j], list):
@@ -466,22 +479,22 @@ def _export_scores_xlsx(cls: Class, tests: list, scores_data: list) -> Streaming
         cell = ws.cell(row=len(scores_data) + 2, column=col)
         _style_xlsx_cell(cell)
         cell.font = Font(name="微软雅黑", size=10, bold=True)
-    
+
     # 自动列宽
     for col in ws.columns:
         max_len = max(len(str(cell.value or "")) for cell in col)
         ws.column_dimensions[col[0].column_letter].width = max(max_len + 4, 12)
-    
+
     buf = io.BytesIO()
     wb.save(buf)
     buf.seek(0)
-    
+
     # 文件名：RFC 5987 编码中文，兼容所有浏览器
     raw_name = f"{cls.name}_成绩表_{datetime.now().strftime('%Y%m%d')}.xlsx"
     ascii_name = raw_name.encode('ascii', 'ignore').decode() or 'scores.xlsx'
     encoded_name = __import__('urllib.parse', fromlist=['quote']).quote(raw_name)
     disposition = f"attachment; filename={ascii_name}; filename*=UTF-8''{encoded_name}"
-    
+
     return StreamingResponse(
         buf,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -560,23 +573,23 @@ async def get_cross_class_comparison(
     """跨班对比：当前班 vs 全平台平均"""
     # 当前班数据
     current = await _class_snapshot(db, cls)
-    
+
     # 全平台所有班级
     result = await db.execute(select(Class).where(Class.id != cls.id))
     all_classes = result.scalars().all()
-    
+
     if not all_classes:
         return {"current": current, "platform_avg": current, "class_details": []}
-    
+
     platform_snapshots = []
     for c in all_classes:
         snap = await _class_snapshot(db, c)
         platform_snapshots.append(snap)
-    
+
     # 计算平台平均值
     def avg(values):
         return round(sum(values) / len(values), 1) if values else 0
-    
+
     platform_avg = {
         "total_students": avg([s["total_students"] for s in platform_snapshots]),
         "avg_reading_progress": avg([s["avg_reading_progress"] for s in platform_snapshots]),
@@ -585,7 +598,7 @@ async def get_cross_class_comparison(
         "completion_rate": avg([s["completion_rate"] for s in platform_snapshots]),
         "avg_daily_study_min": avg([s["avg_daily_study_min"] for s in platform_snapshots])
     }
-    
+
     return {
         "current": current,
         "platform_avg": platform_avg,
@@ -603,11 +616,11 @@ async def _class_snapshot(db: AsyncSession, cls: Class) -> dict:
         )
     )
     total = result.scalar() or 0
-    
+
     if total == 0:
         return {"class_name": cls.name, "total_students": 0, "avg_reading_progress": 0,
                 "avg_score": 0, "pass_rate": 0, "completion_rate": 0, "avg_daily_study_min": 0}
-    
+
     # 阅读进度
     result = await db.execute(
         select(func.avg(ReadingProgress.progress)).select_from(ReadingProgress).join(
@@ -615,7 +628,7 @@ async def _class_snapshot(db: AsyncSession, cls: Class) -> dict:
         ).where(ClassMember.class_id == cls.id, ClassMember.role == UserRole.STUDENT)
     )
     avg_progress = result.scalar() or 0
-    
+
     # 测验成绩
     result = await db.execute(
         select(func.avg(TestResult.score)).select_from(TestResult).join(
@@ -623,7 +636,7 @@ async def _class_snapshot(db: AsyncSession, cls: Class) -> dict:
         ).where(ClassMember.class_id == cls.id)
     )
     avg_score = result.scalar() or 0
-    
+
     # 通过率（>=60分）
     result = await db.execute(
         select(TestResult).join(ClassMember, TestResult.user_id == ClassMember.user_id)
@@ -632,7 +645,7 @@ async def _class_snapshot(db: AsyncSession, cls: Class) -> dict:
     all_results = result.scalars().all()
     passed = sum(1 for r in all_results if (r.score or 0) >= 60)
     pass_rate = round(passed / len(all_results) * 100, 1) if all_results else 0
-    
+
     # 完成率
     result = await db.execute(
         select(ChapterProgress).join(
@@ -650,7 +663,7 @@ async def _class_snapshot(db: AsyncSession, cls: Class) -> dict:
     )
     total_chapters = len(result.scalars().all())
     completion_rate = round(completed_chapters / total_chapters * 100, 1) if total_chapters else 0
-    
+
     # 日平均学习时长（分钟）
     avg_daily = 0
     if total_chapters > 0:
@@ -660,7 +673,7 @@ async def _class_snapshot(db: AsyncSession, cls: Class) -> dict:
             ).where(ClassMember.class_id == cls.id)
         )
         avg_daily = round((result.scalar() or 0) / 60, 1)
-    
+
     return {
         "class_id": cls.id, "class_name": cls.name,
         "total_students": total,
@@ -679,7 +692,7 @@ async def _class_snapshot(db: AsyncSession, cls: Class) -> dict:
 @router.get("/alerts")
 async def get_alerts(
     unread_only: bool = Query(False),
-    severity: Optional[str] = Query(None),
+    severity: str | None = Query(None),
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
     cls: Class = Depends(get_manager_class)
@@ -691,7 +704,7 @@ async def get_alerts(
     if severity:
         q = q.where(AlertRecord.severity == severity)
     q = q.order_by(AlertRecord.created_at.desc()).limit(100)
-    
+
     result = await db.execute(q)
     alerts = result.scalars().all()
     return [{
@@ -747,13 +760,13 @@ async def get_alerts_stats(
         select(AlertRecord).where(AlertRecord.class_id == cls.id)
     )
     all_alerts = result.scalars().all()
-    
+
     unread = sum(1 for a in all_alerts if not a.is_read)
     unresolved = sum(1 for a in all_alerts if not a.is_resolved)
     by_type = {}
     for a in all_alerts:
         by_type[a.alert_type] = by_type.get(a.alert_type, 0) + 1
-    
+
     return {
         "total": len(all_alerts), "unread": unread, "unresolved": unresolved,
         "by_type": by_type
@@ -768,11 +781,11 @@ async def run_alert_detection(
 ):
     """手动触发预警检测"""
     new_alerts = []
-    
+
     # 获取启用的规则
     result = await db.execute(select(AlertRule).where(AlertRule.enabled == True))
     rules = result.scalars().all()
-    
+
     # 获取班级所有学员
     result = await db.execute(
         select(ClassMember, User).join(User).where(
@@ -780,12 +793,12 @@ async def run_alert_detection(
         )
     )
     students = [(cm, u) for cm, u in result.all()]
-    
+
     for rule in rules:
         if rule.rule_type == "inactivity":
             threshold_days = rule.threshold_value or 3
             cutoff = datetime.now(timezone.utc).timestamp() - threshold_days * 86400
-            
+
             for cm, stu in students:
                 # 检查最后活动时间
                 result = await db.execute(
@@ -798,7 +811,7 @@ async def run_alert_detection(
                     msg = f"学员 {stu.name} 已连续 {threshold_days} 天无学习活动"
                     # 去重：同类型同用户24h内不重复
                     new_alerts.append(_mk_alert(rule, stu, cls, msg, "warning", db))
-        
+
         elif rule.rule_type == "score_drop":
             threshold_pct = rule.threshold_value or 30
             for cm, stu in students:
@@ -813,7 +826,7 @@ async def run_alert_detection(
                     if prev_avg > 0 and (prev_avg - latest) / prev_avg * 100 >= threshold_pct:
                         msg = f"学员 {stu.name} 最近成绩下降 {round((prev_avg - latest) / prev_avg * 100)}%（{prev_avg}→{latest}）"
                         new_alerts.append(_mk_alert(rule, stu, cls, msg, "critical", db))
-        
+
         elif rule.rule_type == "fail_rate":
             threshold_pct = rule.threshold_value or 60
             for cm, stu in students:
@@ -827,7 +840,7 @@ async def run_alert_detection(
                     if rate >= threshold_pct:
                         msg = f"学员 {stu.name} 不及格率 {round(rate)}% ({failed}/{len(all_results)})"
                         new_alerts.append(_mk_alert(rule, stu, cls, msg, "critical", db))
-        
+
         elif rule.rule_type == "low_progress":
             threshold_pct = rule.threshold_value or 50
             for cm, stu in students:
@@ -840,13 +853,13 @@ async def run_alert_detection(
                 if avg_prog < threshold_pct:
                     msg = f"学员 {stu.name} 学习进度仅 {round(avg_prog)}%，低于 {threshold_pct}% 阈值"
                     new_alerts.append(_mk_alert(rule, stu, cls, msg, "warning", db))
-    
+
     if new_alerts:
         for alert in new_alerts:
             if alert:
                 db.add(alert)
         await db.commit()
-    
+
     return {"created": len([a for a in new_alerts if a])}
 
 

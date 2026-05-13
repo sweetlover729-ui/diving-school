@@ -1,12 +1,15 @@
 """
 管理员-题目管理 API
 """
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
-from typing import Optional, List
-from sqlalchemy import select, func, delete, text as sql_text
+from sqlalchemy import func, select
+
 from app.core.database import AsyncSessionLocal
-from app.models.class_system import Question as QuestionModel, User, UserRole
+from app.models.class_system import Question as QuestionModel
+from app.models.class_system import User
+
 from .shared import require_admin
 
 router = APIRouter(prefix="/questions", tags=["管理员-题目管理"])
@@ -16,7 +19,8 @@ router = APIRouter(prefix="/questions", tags=["管理员-题目管理"])
 
 import json
 
-def _parse_list(val) -> List[str]:
+
+def _parse_list(val) -> list[str]:
     """从数据库 TEXT/JSON 字段解析为 Python list"""
     if val is None:
         return []
@@ -33,27 +37,27 @@ def _parse_list(val) -> List[str]:
 class QuestionBase(BaseModel):
     content: str
     question_type: str
-    textbook_id: Optional[int] = None
-    chapter_id: Optional[int] = None
+    textbook_id: int | None = None
+    chapter_id: int | None = None
 
 class QuestionCreate(QuestionBase):
-    options: List[str] = []
-    answer: List[str] = []
-    difficulty: Optional[int] = None
-    explanation: Optional[str] = None
+    options: list[str] = []
+    answer: list[str] = []
+    difficulty: int | None = None
+    explanation: str | None = None
 
 class QuestionUpdate(BaseModel):
-    content: Optional[str] = None
-    question_type: Optional[str] = None
-    options: Optional[List[str]] = None
-    answer: Optional[List[str]] = None
-    difficulty: Optional[int] = None
-    explanation: Optional[str] = None
+    content: str | None = None
+    question_type: str | None = None
+    options: list[str] | None = None
+    answer: list[str] | None = None
+    difficulty: int | None = None
+    explanation: str | None = None
 
 
 # ─── 辅助 ────────────────────────────────────────────────────────────────────
 
-def _to_json(val) -> Optional[str]:
+def _to_json(val) -> str | None:
     """Python list → JSON 字符串，用于写入 TEXT 列"""
     if val is None:
         return None
@@ -62,9 +66,11 @@ def _to_json(val) -> Optional[str]:
 
 # ─── 导入模板下载（必须在 /{question_id} 之前定义）───────────────────────────
 
-from fastapi.responses import StreamingResponse
-import io
 import csv
+import io
+
+from fastapi.responses import StreamingResponse
+
 
 @router.get("/import-template")
 async def download_import_template(
@@ -104,9 +110,9 @@ async def import_questions(
 async def list_questions(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
-    keyword: Optional[str] = Query(None),
-    question_type: Optional[str] = Query(None),
-    textbook_id: Optional[int] = Query(None),
+    keyword: str | None = Query(None),
+    question_type: str | None = Query(None),
+    textbook_id: int | None = Query(None),
     _: User = Depends(require_admin),
 ):
     async with AsyncSessionLocal() as db:

@@ -2,29 +2,31 @@
 FastAPI 主应用 - 班级制培训管理系统
 """
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
+from logging import getLogger
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from fastapi.staticfiles import StaticFiles
 
+from app.api.admin import router as admin_router
+
+# 班级制API
+from app.api.auth_v2 import router as auth_router
+from app.api.courses import router as courses_router
+from app.api.documents import admin_router as document_admin_router
+from app.api.documents import student_router as document_student_router
+from app.api.instructor import router as instructor_router
+from app.api.instructor_progress import router as instructor_progress_router
+from app.api.manager import router as manager_router
+from app.api.student import router as student_router
+from app.api.student_chapters import router as student_chapters_router
+from app.api.textbook_import import router as textbook_import_router
 from app.core.config import settings
 from app.core.database import AsyncSessionLocal
 from app.core.errors import setup_error_handlers
 from app.models.class_system import AuditLog
-# 班级制API
-from app.api.auth_v2 import router as auth_router
-from app.api.admin import router as admin_router
-from app.api.instructor import router as instructor_router
-from app.api.student import router as student_router
-from app.api.manager import router as manager_router
-from app.api.student_chapters import router as student_chapters_router
-from app.api.instructor_progress import router as instructor_progress_router
-from app.api.textbook_import import router as textbook_import_router
-from app.api.documents import student_router as document_student_router
-from app.api.documents import admin_router as document_admin_router
-from app.api.courses import router as courses_router
-from logging import getLogger
+
 logger = getLogger(__name__)
 
 
@@ -64,13 +66,13 @@ async def audit_log_middleware(request: Request, call_next):
     """记录所有 API 操作到审计日志"""
     path = request.url.path
     method = request.method
-    
+
     # 静态资源和健康检查不记录
     skip_prefixes = ["/static", "/health", "/docs", "/redoc", "/openapi.json", "/favicon.ico"]
     should_skip = any(path.startswith(p) for p in skip_prefixes)
-    
+
     response: Response = await call_next(request)
-    
+
     if not should_skip and method in ("POST", "PUT", "PATCH", "DELETE", "GET"):
         try:
             # 仅记录写操作和关键读操作
@@ -79,16 +81,16 @@ async def audit_log_middleware(request: Request, call_next):
                 "GET": "view"
             }
             action = audit_actions.get(method, "unknown")
-            
+
             # 从 path 推断 target_type
             path_parts = path.split("/")
             target_type = path_parts[3] if len(path_parts) > 3 else "unknown"
-            
+
             # 获取用户信息（从 header 或 cookie）
             user_name = request.headers.get("x-user-name", "")
             user_role = request.headers.get("x-user-role", "")
             ip = request.client.host if request.client else ""
-            
+
             async with AsyncSessionLocal() as session:
                 log = AuditLog(
                     user_name=user_name or "anonymous",
@@ -103,7 +105,7 @@ async def audit_log_middleware(request: Request, call_next):
                 await session.commit()
         except Exception as e:
             logger.warning(f"审计日志写入失败: {e}", exc_info=True)
-    
+
     return response
 
 # 注册API路由

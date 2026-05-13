@@ -2,15 +2,20 @@
 Admin API - Content Nodes Management
 CRUD + tree query + LLM-assisted parsing trigger
 """
-from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
-from pydantic import BaseModel, Field
-from typing import Optional, List
-from sqlalchemy import select, and_
-from sqlalchemy.ext.asyncio import AsyncSession
-from app.core.database import get_db
-from app.models.class_system import ContentNode, Textbook, Category
-from app.api.admin.shared import require_admin
+import logging
 from datetime import datetime, timezone
+
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
+from pydantic import BaseModel, Field
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.api.admin.shared import require_admin
+from app.core.database import get_db
+from app.models.class_system import ContentNode, Textbook
+
+logger = logging.getLogger(__name__)
+import json
 
 router = APIRouter(prefix="/content-nodes", tags=["Content Nodes"])
 
@@ -20,60 +25,60 @@ class ContentNodeCreate(BaseModel):
     textbook_id: int = Field(..., gt=0)
     title: str = Field(..., min_length=1, max_length=500)
     node_type: str = "section"
-    content: Optional[str] = None
-    summary: Optional[str] = None
+    content: str | None = None
+    summary: str | None = None
     level: int = 0
     sort_order: int = 0
-    parent_id: Optional[int] = None
-    page_start: Optional[int] = None
-    page_end: Optional[int] = None
-    difficulty_level: Optional[str] = "beginner"
-    learning_objectives: Optional[str] = "[]"
-    tags: Optional[str] = "[]"
-    key_concepts: Optional[str] = "[]"
-    source_location: Optional[str] = None
-    is_visible: Optional[bool] = True
+    parent_id: int | None = None
+    page_start: int | None = None
+    page_end: int | None = None
+    difficulty_level: str | None = "beginner"
+    learning_objectives: str | None = "[]"
+    tags: str | None = "[]"
+    key_concepts: str | None = "[]"
+    source_location: str | None = None
+    is_visible: bool | None = True
 
 class ContentNodeUpdate(BaseModel):
-    title: Optional[str] = None
-    node_type: Optional[str] = None
-    content: Optional[str] = None
-    summary: Optional[str] = None
-    level: Optional[int] = None
-    sort_order: Optional[int] = None
-    parent_id: Optional[int] = None
-    page_start: Optional[int] = None
-    page_end: Optional[int] = None
-    difficulty_level: Optional[str] = None
-    learning_objectives: Optional[str] = None
-    tags: Optional[str] = None
-    key_concepts: Optional[str] = None
-    source_location: Optional[str] = None
-    is_visible: Optional[bool] = None
-    review_status: Optional[str] = None
+    title: str | None = None
+    node_type: str | None = None
+    content: str | None = None
+    summary: str | None = None
+    level: int | None = None
+    sort_order: int | None = None
+    parent_id: int | None = None
+    page_start: int | None = None
+    page_end: int | None = None
+    difficulty_level: str | None = None
+    learning_objectives: str | None = None
+    tags: str | None = None
+    key_concepts: str | None = None
+    source_location: str | None = None
+    is_visible: bool | None = None
+    review_status: str | None = None
 
 class ContentNodeResponse(BaseModel):
     id: int
     textbook_id: int
     title: str
-    node_type: Optional[str]
-    content_raw: Optional[str]
-    summary: Optional[str]
+    node_type: str | None
+    content_raw: str | None
+    summary: str | None
     level: int
     sort_order: int
-    parent_id: Optional[int]
-    page_start: Optional[int]
-    page_end: Optional[int]
-    difficulty_level: Optional[str]
-    learning_objectives: Optional[str]
-    tags: Optional[str]
-    key_concepts: Optional[str]
-    source_location: Optional[str]
+    parent_id: int | None
+    page_start: int | None
+    page_end: int | None
+    difficulty_level: str | None
+    learning_objectives: str | None
+    tags: str | None
+    key_concepts: str | None
+    source_location: str | None
     is_visible: bool
-    review_status: Optional[str]
-    content_hash: Optional[str]
-    created_at: Optional[str]
-    updated_at: Optional[str]
+    review_status: str | None
+    content_hash: str | None
+    created_at: str | None
+    updated_at: str | None
     children_count: int = 0
 
     class Config:
@@ -81,12 +86,12 @@ class ContentNodeResponse(BaseModel):
 
 # ============ Endpoints ============
 
-@router.get("", response_model=List[ContentNodeResponse])
+@router.get("", response_model=list[ContentNodeResponse])
 async def list_content_nodes(
-    textbook_id: Optional[int] = Query(None),
-    parent_id: Optional[int] = Query(None),
-    node_type: Optional[str] = Query(None),
-    is_visible: Optional[bool] = Query(None),
+    textbook_id: int | None = Query(None),
+    parent_id: int | None = Query(None),
+    node_type: str | None = Query(None),
+    is_visible: bool | None = Query(None),
     limit: int = Query(100, le=500),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
@@ -115,7 +120,7 @@ async def list_content_nodes(
         out.append(_node_to_response(n, len(child_count.scalars().all())))
     return out
 
-@router.get("/tree/{textbook_id}", response_model=List[ContentNodeResponse])
+@router.get("/tree/{textbook_id}", response_model=list[ContentNodeResponse])
 async def get_content_tree(
     textbook_id: int,
     db: AsyncSession = Depends(get_db),
@@ -301,11 +306,10 @@ async def _delete_children(db: AsyncSession, parent_id: int):
 
 async def _run_parse(textbook_id: int, file_path: str):
     """Background task: run full parsing pipeline with LLM config check"""
-    import asyncio
-    from app.core.database import AsyncSessionLocal
-    from app.core.llm import get_llm_helper
     from app.core import llm_config
     from app.core.content_parser_v2 import ContentParserV2
+    from app.core.database import AsyncSessionLocal
+    from app.core.llm import get_llm_helper
 
     llm = get_llm_helper()
     parser = ContentParserV2(llm_helper=llm)

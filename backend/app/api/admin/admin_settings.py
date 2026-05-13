@@ -2,8 +2,9 @@
 管理员-系统设置 / 预警规则 / 审计日志
 """
 
-from .shared import *
 from app.models.class_system import Question
+
+from .shared import *
 
 router = APIRouter(prefix="", tags=["管理员-系统设置"])
 
@@ -172,14 +173,14 @@ async def list_audit_logs(
         q = q.where(AuditLog.action == action)
     if user_name:
         q = q.where(AuditLog.user_name.ilike(f"%{user_name}%"))
-    
+
     count_q = select(func.count()).select_from(q.subquery())
     total = (await db.execute(count_q)).scalar() or 0
-    
+
     q = q.order_by(AuditLog.created_at.desc()).offset((page - 1) * page_size).limit(page_size)
     result = await db.execute(q)
     logs = result.scalars().all()
-    
+
     return {
         "total": total, "page": page, "page_size": page_size,
         "data": [{

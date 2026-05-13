@@ -3,13 +3,15 @@ Admin API - LLM Configuration
 Super admin only: manage API key, global toggle, per-course toggle
 """
 import asyncio
+
 import httpx
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.core.database import get_db
-from app.core import llm_config
+
 from app.api.admin.shared import require_admin
+from app.core import llm_config
+from app.core.database import get_db
 
 router = APIRouter(prefix="/llm-config", tags=["LLM配置"])
 

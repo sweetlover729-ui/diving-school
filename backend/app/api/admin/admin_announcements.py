@@ -1,8 +1,9 @@
 """
 管理员-公告管理 CRUD
 """
-from .shared import *
 from app.models.class_system import Announcement, Class
+
+from .shared import *
 
 router = APIRouter(prefix="", tags=["管理员-公告管理"])
 

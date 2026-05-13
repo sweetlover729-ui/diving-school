@@ -1,52 +1,54 @@
 """
 管理员-培训类别管理 API
 """
+from datetime import datetime, timezone
+from typing import Any
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
-from typing import Optional, List, Dict, Any
-from sqlalchemy import select, func
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.api.admin.shared import require_admin
 from app.core.database import get_db
 from app.models.class_system import Category
-from app.api.admin.shared import require_admin
-from datetime import datetime, timezone
 
 router = APIRouter(prefix="/categories", tags=["管理员-培训类别"])
 
 class CategoryCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
     code: str = Field(..., min_length=1, max_length=50)
-    description: Optional[str] = None
-    icon: Optional[str] = None
-    sort_order: Optional[int] = 0
-    is_active: Optional[bool] = True
-    terminology_config: Optional[Dict[str, Any]] = None
+    description: str | None = None
+    icon: str | None = None
+    sort_order: int | None = 0
+    is_active: bool | None = True
+    terminology_config: dict[str, Any] | None = None
 
 class CategoryUpdate(BaseModel):
-    name: Optional[str] = None
-    code: Optional[str] = None
-    description: Optional[str] = None
-    icon: Optional[str] = None
-    sort_order: Optional[int] = None
-    is_active: Optional[bool] = None
-    terminology_config: Optional[Dict[str, Any]] = None
+    name: str | None = None
+    code: str | None = None
+    description: str | None = None
+    icon: str | None = None
+    sort_order: int | None = None
+    is_active: bool | None = None
+    terminology_config: dict[str, Any] | None = None
 
 class CategoryResponse(BaseModel):
     id: int
     name: str
     code: str
-    description: Optional[str]
-    icon: Optional[str]
+    description: str | None
+    icon: str | None
     sort_order: int
     is_active: bool
-    terminology_config: Optional[dict]
-    created_at: Optional[str]
-    updated_at: Optional[str]
+    terminology_config: dict | None
+    created_at: str | None
+    updated_at: str | None
 
     class Config:
         from_attributes = True
 
-@router.get("", response_model=List[CategoryResponse])
+@router.get("", response_model=list[CategoryResponse])
 async def list_categories(
     include_inactive: bool = Query(False),
     db: AsyncSession = Depends(get_db),

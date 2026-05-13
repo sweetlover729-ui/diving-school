@@ -3,15 +3,14 @@ Admin API - 班级课程关联管理 (V7)
 管理班级与课程的绑定关系
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
-from sqlalchemy import select, func, text
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
-from typing import Optional
 
+from app.api.admin.shared import User, require_admin
 from app.core.database import get_db
-from app.models.class_system import Class, Course, ClassCourse
-from app.api.admin.shared import require_admin, User
+from app.models.class_system import Class, ClassCourse, Course
 
 router = APIRouter(prefix="", tags=["V7-班级课程管理"])
 

@@ -40,7 +40,7 @@ async def create_instructor(
     """Create Instructor"""
     pw = req.password or (req.id_card or "000000")[-6:]
     pw_hash = bcrypt.hashpw(pw.encode(), bcrypt.gensalt()).decode()
-    
+
     instructor = User(
         name=req.name, instructor_code=req.instructor_code or "",
         id_card=req.id_card or "", phone=req.phone,
@@ -50,7 +50,7 @@ async def create_instructor(
     db.add(instructor)
     await db.commit()
     await db.refresh(instructor)
-    
+
     return {
         "id": instructor.id, "name": instructor.name, "phone": instructor.phone,
         "password": pw  # 仅创建时返回

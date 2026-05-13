@@ -25,7 +25,7 @@ async def list_users(
         sql += " AND role = :role"
         params["role"] = role
     sql += " ORDER BY id DESC"
-    
+
     result = await db.execute(sql_text(sql), params)
     return [dict(r._mapping) for r in result.fetchall()]
 

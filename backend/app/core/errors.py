@@ -1,13 +1,14 @@
 """
 API 文档和错误处理
 """
-from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
-from fastapi.exceptions import RequestValidationError
-import logging
 import copy
+import logging
 from datetime import datetime, timezone
 from typing import Any
+
+from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +41,7 @@ class APIException(Exception):
 
 def setup_error_handlers(app: FastAPI):
     """设置错误处理器"""
-    
+
     @app.exception_handler(APIException)
     async def api_exception_handler(request: Request, exc: APIException):
         """处理自定义 API 异常"""
@@ -59,7 +60,7 @@ def setup_error_handlers(app: FastAPI):
                 "timestamp": _now().isoformat(),
             }
         )
-    
+
     @app.exception_handler(RequestValidationError)
     async def validation_exception_handler(request: Request, exc: RequestValidationError):
         """处理验证错误"""
@@ -77,7 +78,7 @@ def setup_error_handlers(app: FastAPI):
                 "timestamp": _now().isoformat(),
             }
         )
-    
+
     @app.exception_handler(Exception)
     async def general_exception_handler(request: Request, exc: Exception):
         """处理通用异常"""

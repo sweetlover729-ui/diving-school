@@ -1,15 +1,16 @@
 """
 管理员-课程管理 API
 """
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
-from typing import Optional, List
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.core.database import get_db
-from app.models.class_system import Course, Category
+
 from app.api.admin.shared import require_admin
-from datetime import datetime, timezone
+from app.core.database import get_db
+from app.models.class_system import Category, Course
 
 router = APIRouter(prefix="/courses", tags=["管理员-课程管理"])
 
@@ -17,42 +18,42 @@ class CourseCreate(BaseModel):
     category_id: int = Field(..., gt=0)
     code: str = Field(..., min_length=1, max_length=30)
     name: str = Field(..., min_length=1, max_length=200)
-    description: Optional[str] = None
-    level: Optional[str] = "beginner"
-    duration_days: Optional[int] = None
-    sort_order: Optional[int] = 0
-    is_active: Optional[bool] = True
+    description: str | None = None
+    level: str | None = "beginner"
+    duration_days: int | None = None
+    sort_order: int | None = 0
+    is_active: bool | None = True
 
 class CourseUpdate(BaseModel):
-    category_id: Optional[int] = Field(None, gt=0)
-    code: Optional[str] = None
-    name: Optional[str] = None
-    description: Optional[str] = None
-    level: Optional[str] = None
-    duration_days: Optional[int] = None
-    sort_order: Optional[int] = None
-    is_active: Optional[bool] = None
+    category_id: int | None = Field(None, gt=0)
+    code: str | None = None
+    name: str | None = None
+    description: str | None = None
+    level: str | None = None
+    duration_days: int | None = None
+    sort_order: int | None = None
+    is_active: bool | None = None
 
 class CourseResponse(BaseModel):
     id: int
     category_id: int
-    category_name: Optional[str] = None
+    category_name: str | None = None
     code: str
     name: str
-    description: Optional[str]
-    level: Optional[str]
-    duration_days: Optional[int]
+    description: str | None
+    level: str | None
+    duration_days: int | None
     sort_order: int
     is_active: bool
-    created_at: Optional[str]
-    updated_at: Optional[str]
+    created_at: str | None
+    updated_at: str | None
 
     class Config:
         from_attributes = True
 
-@router.get("", response_model=List[CourseResponse])
+@router.get("", response_model=list[CourseResponse])
 async def list_courses(
-    category_id: Optional[int] = Query(None),
+    category_id: int | None = Query(None),
     include_inactive: bool = Query(False),
     db: AsyncSession = Depends(get_db),
     _: dict = Depends(require_admin),

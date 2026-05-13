@@ -12,14 +12,24 @@ V7.1.0 — 精确匹配实际 DB schema，零隐式偏差
   - 新增 SystemSettings, Module, Lesson 等遗留模型
   - 移除 18 个无 DB 表的模型定义 (待 V7 迁移补建)
 """
-from datetime import datetime, timezone
-from sqlalchemy import (
-    Column, Integer, String, Boolean, DateTime, Text,
-    ForeignKey, Date, Enum, JSON, UniqueConstraint,
-)
-from sqlalchemy.orm import relationship
 import enum
 import json
+from datetime import datetime, timezone
+
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    Column,
+    Date,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+)
+from sqlalchemy.orm import relationship
 
 from app.core.database import Base
 

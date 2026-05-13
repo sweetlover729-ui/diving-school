@@ -68,7 +68,7 @@ async def get_textbook_detail(
     tb = await db.get(Textbook, textbook_id)
     if not tb:
         raise HTTPException(status_code=404, detail="教材不存在")
-    
+
     # For PDF textbooks, also return pages
     pages = []
     if tb.file_type == 'pdf':
@@ -87,7 +87,7 @@ async def get_textbook_detail(
             {"id": r[0], "sort_order": r[1], "url": r[2], "is_visible": r[3]}
             for r in rows
         ]
-    
+
     return {
         "id": tb.id, "name": tb.name, "description": tb.description,
         "total_chapters": tb.total_chapters, "total_pages": tb.total_pages,
@@ -191,9 +191,9 @@ async def import_textbook_content(
     tb = await db.get(Textbook, textbook_id)
     if not tb:
         raise HTTPException(status_code=404, detail="教材不存在")
-    
+
     content = await file.read()
-    
+
     # 保存源文件
     backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     src_dir = os.path.join(backend_dir, "static", "textbooks", str(textbook_id))
@@ -201,16 +201,17 @@ async def import_textbook_content(
     src_path = os.path.join(src_dir, "source.docx")
     with open(src_path, 'wb') as f:
         f.write(content)
-    
+
     # 更新数据库 file_path
     relative_path = f"static/textbooks/{textbook_id}/source.docx"
     tb.file_path = relative_path
     await db.commit()
-    
+
     # 解析章节（直接解析 docx，不依赖 textbook_import.py 的端点签名）
     try:
-        from docx import Document
         from io import BytesIO
+
+        from docx import Document
         doc = Document(BytesIO(content))
 
         # 解析章节
@@ -319,9 +320,9 @@ async def upload_textbook_pdf(
     tb = await db.get(Textbook, textbook_id)
     if not tb:
         raise HTTPException(status_code=404, detail="教材不存在")
-    
+
     content = await file.read()
-    
+
     # 保存 PDF
     backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     pdf_dir = os.path.join(backend_dir, "static", "textbooks", str(textbook_id))
@@ -329,16 +330,15 @@ async def upload_textbook_pdf(
     pdf_path = os.path.join(pdf_dir, "textbook.pdf")
     with open(pdf_path, 'wb') as f:
         f.write(content)
-    
+
     tb.file_type = 'pdf'
     tb.import_status = 'success'
     await db.commit()
 
     # ── 自动生成页面图片并写入 textbook_pages ─────────────────────────
     try:
+
         import fitz
-        from PIL import Image
-        import io as _io
 
         # 1. 清理旧记录
         await db.execute(
@@ -347,7 +347,6 @@ async def upload_textbook_pdf(
         )
 
         # 2. 删除旧图片
-        import shutil as _sh
         for f in os.listdir(pdf_dir):
             if f.startswith('page_') and f.endswith('.jpg'):
                 os.remove(os.path.join(pdf_dir, f))
@@ -521,14 +520,14 @@ async def restore_textbook_to_document(
     tb = await db.get(Textbook, textbook_id)
     if not tb:
         raise HTTPException(status_code=404, detail="教材不存在")
-    
+
     if tb.file_path:
         backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         doc_path = tb.file_path if os.path.isabs(tb.file_path) else os.path.join(backend_dir, tb.file_path)
         if os.path.exists(doc_path):
             with open(doc_path, 'rb') as f:
                 content = f.read()
-            
+
             # 重新导入
             from app.api.textbook_import import import_textbook_content as do_import
             try:
@@ -543,7 +542,7 @@ async def restore_textbook_to_document(
                 return {"success": True, "message": f"文档已恢复，共 {chapter_count} 个章节"}
             except Exception as e:
                 raise HTTPException(status_code=500, detail=f"恢复失败: {str(e)}")
-    
+
     raise HTTPException(status_code=404, detail="未找到源文档")
 
 
@@ -560,10 +559,10 @@ async def get_ai_textbook_structure(
     interactive_path = os.path.join(settings.INTERACTIVE_DATA_DIR, f"{textbook_id}_interactive.json")
     if not os.path.exists(interactive_path):
         raise HTTPException(status_code=404, detail="互动式数据不存在")
-    
+
     with open(interactive_path) as f:
         data = json.load(f)
-    
+
     return {
         "textbook_id": textbook_id,
         "title": data.get("title", ""),
@@ -586,14 +585,14 @@ async def get_ai_textbook_glossary(
         interactive_path = os.path.join(settings.INTERACTIVE_DATA_DIR, f"{textbook_id}_interactive.json")
         if not os.path.exists(interactive_path):
             return []
-        
+
         with open(interactive_path) as f:
             data = json.load(f)
-        
+
         glossary = []
         for kp_id, kp_data in data.get("key_concepts_map", {}).items():
             glossary.append({"id": kp_id, "name": kp_data.get("name", ""), "description": kp_data.get("description", "")})
-        
+
         return glossary
     except Exception as e:
         logger.error(f"[ai-glossary] textbook_id={textbook_id} 错误: {e}")
@@ -611,14 +610,14 @@ async def get_ai_glossary_detail(
     interactive_path = os.path.join(settings.INTERACTIVE_DATA_DIR, f"{textbook_id}_interactive.json")
     if not os.path.exists(interactive_path):
         raise HTTPException(status_code=404, detail="互动式数据不存在")
-    
+
     with open(interactive_path) as f:
         data = json.load(f)
-    
+
     kp_data = data.get("key_concepts_map", {}).get(kp_id, {})
     if not kp_data:
         raise HTTPException(status_code=404, detail="知识点不存在")
-    
+
     return kp_data
 
 
@@ -633,10 +632,10 @@ async def get_ai_textbook_page(
     interactive_path = os.path.join(settings.INTERACTIVE_DATA_DIR, f"{textbook_id}_interactive.json")
     if not os.path.exists(interactive_path):
         raise HTTPException(status_code=404, detail="互动式数据不存在")
-    
+
     with open(interactive_path) as f:
         data = json.load(f)
-    
+
     # 查找对应章节
     for section in data.get("sections", []):
         if section.get("id") == page_id:
@@ -647,7 +646,7 @@ async def get_ai_textbook_page(
                 "units": section.get("units", []),
                 "estimated_time": section.get("estimated_time", 10)
             }
-    
+
     raise HTTPException(status_code=404, detail="页面不存在")
 
 
@@ -688,10 +687,10 @@ async def get_interactive_textbook(
     interactive_path = os.path.join(settings.INTERACTIVE_DATA_DIR, f"{textbook_id}_interactive.json")
     if not os.path.exists(interactive_path):
         raise HTTPException(status_code=404, detail="互动式数据不存在，请先点击「重新转换」")
-    
+
     with open(interactive_path) as f:
         data = json.load(f)
-    
+
     return data
 
 
@@ -705,10 +704,10 @@ async def get_interactive_structure(
     interactive_path = os.path.join(settings.INTERACTIVE_DATA_DIR, f"{textbook_id}_interactive.json")
     if not os.path.exists(interactive_path):
         raise HTTPException(status_code=404, detail="互动式数据不存在")
-    
+
     with open(interactive_path) as f:
         data = json.load(f)
-    
+
     return {
         "id": data.get("id"),
         "title": data.get("title"),
@@ -758,17 +757,17 @@ async def convert_textbook_to_interactive(
     tb = await db.get(Textbook, textbook_id)
     if not tb:
         raise HTTPException(status_code=404, detail="教材不存在")
-    
+
     # ★★★ 修复：直接用数据库记录的 file_path（上传时已正确设置）
     docx_path = None
-    
+
     if tb.file_path:
         backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         candidate = tb.file_path if os.path.isabs(tb.file_path) else os.path.join(backend_dir, tb.file_path)
         if os.path.exists(candidate):
             docx_path = candidate
             logger.info(f"[convert-interactive] 使用数据库 file_path: {docx_path}")
-    
+
     # 兜底：直接在 static/textbooks/{id}/source.docx
     if not docx_path:
         backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -776,27 +775,27 @@ async def convert_textbook_to_interactive(
         if os.path.exists(fallback):
             docx_path = fallback
             logger.info(f"[convert-interactive] 使用兜底路径: {docx_path}")
-    
+
     if not docx_path:
         raise HTTPException(status_code=404, detail=f"未找到教材文件: {tb.file_path}")
-    
+
     try:
         # 使用增强版转换器
         converter = EnhancedAIConverter(docx_path)
         interactive_data = converter.convert()
-        
+
         # 保存 JSON 文件
         output_dir = settings.INTERACTIVE_DATA_DIR
         os.makedirs(output_dir, exist_ok=True)
         output_path = os.path.join(output_dir, f"{textbook_id}_interactive.json")
         converter.save_json(output_path)
-        
+
         # 更新数据库
         tb.file_type = 'interactive'
         tb.has_interactive = True
         tb.interactive_path = output_path
         await db.commit()
-        
+
         return {
             "success": True,
             "message": f"转换成功！共生成 {interactive_data.total_sections} 个章节",
@@ -847,10 +846,10 @@ async def update_interactive_section(
     interactive_path = os.path.join(settings.INTERACTIVE_DATA_DIR, f"{textbook_id}_interactive.json")
     if not os.path.exists(interactive_path):
         raise HTTPException(status_code=404, detail="互动式数据不存在")
-    
+
     with open(interactive_path) as f:
         data = json.load(f)
-    
+
     for section in data.get("sections", []):
         if section.get("id") == section_id:
             if title is not None:
@@ -858,10 +857,10 @@ async def update_interactive_section(
             if content is not None:
                 section["content"] = content
             break
-    
+
     with open(interactive_path, 'w') as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
-    
+
     return {"success": True}
 
 
@@ -876,16 +875,16 @@ async def delete_interactive_section(
     interactive_path = os.path.join(settings.INTERACTIVE_DATA_DIR, f"{textbook_id}_interactive.json")
     if not os.path.exists(interactive_path):
         raise HTTPException(status_code=404, detail="互动式数据不存在")
-    
+
     with open(interactive_path) as f:
         data = json.load(f)
-    
+
     data["sections"] = [s for s in data.get("sections", []) if s.get("id") != section_id]
     data["total_sections"] = len(data["sections"])
-    
+
     with open(interactive_path, 'w') as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
-    
+
     return {"success": True}
 
 
@@ -900,18 +899,18 @@ async def hide_interactive_section(
     interactive_path = os.path.join(settings.INTERACTIVE_DATA_DIR, f"{textbook_id}_interactive.json")
     if not os.path.exists(interactive_path):
         raise HTTPException(status_code=404, detail="互动式数据不存在")
-    
+
     with open(interactive_path) as f:
         data = json.load(f)
-    
+
     for section in data.get("sections", []):
         if section.get("id") == section_id:
             section["is_hidden"] = True
             break
-    
+
     with open(interactive_path, 'w') as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
-    
+
     return {"success": True}
 
 
@@ -926,18 +925,18 @@ async def unhide_interactive_section(
     interactive_path = os.path.join(settings.INTERACTIVE_DATA_DIR, f"{textbook_id}_interactive.json")
     if not os.path.exists(interactive_path):
         raise HTTPException(status_code=404, detail="互动式数据不存在")
-    
+
     with open(interactive_path) as f:
         data = json.load(f)
-    
+
     for section in data.get("sections", []):
         if section.get("id") == section_id:
             section["is_hidden"] = False
             break
-    
+
     with open(interactive_path, 'w') as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
-    
+
     return {"success": True}
 
 
@@ -958,10 +957,10 @@ async def split_interactive_section(
     interactive_path = os.path.join(settings.INTERACTIVE_DATA_DIR, f"{textbook_id}_interactive.json")
     if not os.path.exists(interactive_path):
         raise HTTPException(status_code=404, detail="互动式数据不存在")
-    
+
     with open(interactive_path) as f:
         data = json.load(f)
-    
+
     # 找到要拆分的章节
     sections = data.get("sections", [])
     split_idx = None
@@ -969,10 +968,10 @@ async def split_interactive_section(
         if s.get("id") == section_id:
             split_idx = i
             break
-    
+
     if split_idx is None:
         raise HTTPException(status_code=404, detail="章节不存在")
-    
+
     import uuid
     # 创建下半部分章节
     new_section = {
@@ -983,14 +982,14 @@ async def split_interactive_section(
         "estimated_time": 5,
         "key_concepts": []
     }
-    
+
     sections.insert(split_idx + 1, new_section)
     data["sections"] = sections
     data["total_sections"] = len(sections)
-    
+
     with open(interactive_path, 'w') as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
-    
+
     return {"success": True, "new_section_id": new_section["id"]}
 
 
@@ -1004,32 +1003,32 @@ async def merge_interactive_sections(
     """Merge Interactive Sections"""
     if len(section_ids) < 2:
         raise HTTPException(status_code=400, detail="至少选择2个章节才能合并")
-    
+
     interactive_path = os.path.join(settings.INTERACTIVE_DATA_DIR, f"{textbook_id}_interactive.json")
     if not os.path.exists(interactive_path):
         raise HTTPException(status_code=404, detail="互动式数据不存在")
-    
+
     with open(interactive_path) as f:
         data = json.load(f)
-    
+
     sections = data.get("sections", [])
     to_merge = [s for s in sections if s.get("id") in section_ids]
-    
+
     if len(to_merge) < 2:
         raise HTTPException(status_code=404, detail="未找到要合并的章节")
-    
+
     # 合并为第一个章节
     merged = to_merge[0]
     for s in to_merge[1:]:
         merged["units"] = (merged.get("units", []) or []) + (s.get("units", []) or [])
         sections = [s2 for s2 in sections if s2.get("id") != s.get("id")]
-    
+
     data["sections"] = sections
     data["total_sections"] = len(sections)
-    
+
     with open(interactive_path, 'w') as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
-    
+
     return {"success": True}
 
 
@@ -1044,22 +1043,22 @@ async def reorder_interactive_sections(
     interactive_path = os.path.join(settings.INTERACTIVE_DATA_DIR, f"{textbook_id}_interactive.json")
     if not os.path.exists(interactive_path):
         raise HTTPException(status_code=404, detail="互动式数据不存在")
-    
+
     with open(interactive_path) as f:
         data = json.load(f)
-    
+
     # 按新顺序重新排列
     sections = data.get("sections", [])
     sections_map = {s.get("id"): s for s in sections}
     new_order = [sections_map.get(sid) for sid in section_ids if sid in sections_map]
     new_order = [s for s in new_order if s is not None]
-    
+
     data["sections"] = new_order
     data["total_sections"] = len(new_order)
-    
+
     with open(interactive_path, 'w') as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
-    
+
     return {"success": True}
 
 
@@ -1078,10 +1077,10 @@ async def update_interactive_unit(
     interactive_path = os.path.join(settings.INTERACTIVE_DATA_DIR, f"{textbook_id}_interactive.json")
     if not os.path.exists(interactive_path):
         raise HTTPException(status_code=404, detail="互动式数据不存在")
-    
+
     with open(interactive_path) as f:
         data = json.load(f)
-    
+
     for section in data.get("sections", []):
         if section.get("id") == section_id:
             for unit in section.get("units", []):
@@ -1089,10 +1088,10 @@ async def update_interactive_unit(
                     unit["content"] = content
                     break
             break
-    
+
     with open(interactive_path, 'w') as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
-    
+
     return {"success": True}
 
 
@@ -1107,16 +1106,16 @@ async def delete_interactive_unit(
     interactive_path = os.path.join(settings.INTERACTIVE_DATA_DIR, f"{textbook_id}_interactive.json")
     if not os.path.exists(interactive_path):
         raise HTTPException(status_code=404, detail="互动式数据不存在")
-    
+
     with open(interactive_path) as f:
         data = json.load(f)
-    
+
     for section in data.get("sections", []):
         section["units"] = [u for u in section.get("units", []) if u.get("id") != unit_id]
-    
+
     with open(interactive_path, 'w') as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
-    
+
     return {"success": True}
 
 
@@ -1131,19 +1130,19 @@ async def hide_interactive_unit(
     interactive_path = os.path.join(settings.INTERACTIVE_DATA_DIR, f"{textbook_id}_interactive.json")
     if not os.path.exists(interactive_path):
         raise HTTPException(status_code=404, detail="互动式数据不存在")
-    
+
     with open(interactive_path) as f:
         data = json.load(f)
-    
+
     for section in data.get("sections", []):
         for unit in section.get("units", []):
             if unit.get("id") == unit_id:
                 unit["is_hidden"] = True
                 break
-    
+
     with open(interactive_path, 'w') as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
-    
+
     return {"success": True}
 
 
@@ -1158,19 +1157,19 @@ async def unhide_interactive_unit(
     interactive_path = os.path.join(settings.INTERACTIVE_DATA_DIR, f"{textbook_id}_interactive.json")
     if not os.path.exists(interactive_path):
         raise HTTPException(status_code=404, detail="互动式数据不存在")
-    
+
     with open(interactive_path) as f:
         data = json.load(f)
-    
+
     for section in data.get("sections", []):
         for unit in section.get("units", []):
             if unit.get("id") == unit_id:
                 unit["is_hidden"] = False
                 break
-    
+
     with open(interactive_path, 'w') as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
-    
+
     return {"success": True}
 
 
@@ -1185,16 +1184,16 @@ async def delete_interactive_units_batch(
     interactive_path = os.path.join(settings.INTERACTIVE_DATA_DIR, f"{textbook_id}_interactive.json")
     if not os.path.exists(interactive_path):
         raise HTTPException(status_code=404, detail="互动式数据不存在")
-    
+
     with open(interactive_path) as f:
         data = json.load(f)
-    
+
     for section in data.get("sections", []):
         section["units"] = [u for u in section.get("units", []) if u.get("id") not in unit_ids]
-    
+
     with open(interactive_path, 'w') as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
-    
+
     return {"success": True, "deleted": len(unit_ids)}
 
 
@@ -1208,21 +1207,21 @@ async def merge_interactive_units(
     """Merge Interactive Units"""
     if len(unit_ids) < 2:
         raise HTTPException(status_code=400, detail="至少选择2个单元才能合并")
-    
+
     interactive_path = os.path.join(settings.INTERACTIVE_DATA_DIR, f"{textbook_id}_interactive.json")
     if not os.path.exists(interactive_path):
         raise HTTPException(status_code=404, detail="互动式数据不存在")
-    
+
     with open(interactive_path) as f:
         data = json.load(f)
-    
+
     merged_content = ""
     for section in data.get("sections", []):
         for unit in section.get("units", []):
             if unit.get("id") in unit_ids:
                 merged_content += unit.get("content", "") + "\n\n"
                 section["units"] = [u for u in section.get("units", []) if u.get("id") != unit.get("id")]
-    
+
     if section.get("units"):
         section["units"][-1]["content"] = merged_content.strip()
     else:
@@ -1231,9 +1230,9 @@ async def merge_interactive_units(
             "type": "paragraph",
             "content": merged_content.strip()
         })
-    
+
     with open(interactive_path, 'w') as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
-    
+
     return {"success": True}
 

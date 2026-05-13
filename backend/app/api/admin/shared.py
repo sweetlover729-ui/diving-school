@@ -2,39 +2,15 @@
 admin 公共模块 - 所有子模块共享的导入、依赖和 Schema 定义
 v2: 精细化角色守卫
 """
-import os
-import re
-import json
 import logging
-import io
-import bcrypt
-from datetime import datetime, timezone, timedelta
-from typing import Optional, List, Dict, Any
-from decimal import Decimal
+from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Body, Form
-from fastapi.responses import StreamingResponse, JSONResponse
-from pydantic import BaseModel, Field
-from sqlalchemy import select, func, and_, or_, text as sql_text, update, delete
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
-from docx import Document
+from fastapi import Depends, HTTPException
+from pydantic import BaseModel
 
-from app.core.database import AsyncSessionLocal, get_db
-from app.core.config import settings
-from app.core.textbook_utils import (
-    get_class_textbooks, get_class_textbook_ids, get_class_textbook_pairs,
-    assign_textbook_to_class, remove_textbook_from_class
-)
-from app.core.ai_interactive_converter import AIInteractiveConverter
-from app.core.enhanced_converter import EnhancedAIConverter, TextbookEditor
-from app.models.class_system import (
-    User, Class, ClassMember, ClassTextbook, Textbook, Chapter, Company,
-    UserRole, ClassStatus, TestType, QuestionType, TestStatus,
-    SystemConfig, AlertRule, AlertRecord, AuditLog, LearningPath,
-    ChapterProgress, TestResult
-)
 from app.api.auth_v2 import get_current_user
+from app.core.database import AsyncSessionLocal
+from app.models.class_system import User, UserRole
 
 logger = logging.getLogger(__name__)
 
@@ -135,7 +111,7 @@ async def require_authenticated(user: User = Depends(get_current_user)):
 
 class TextbookCreate(BaseModel):
     name: str
-    description: Optional[str] = ""
+    description: str | None = ""
     total_chapters: int = 0
     total_pages: int = 0
     is_active: bool = True
@@ -144,29 +120,29 @@ class TextbookCreate(BaseModel):
 class ClassCreateRequest(BaseModel):
     name: str
     location: str = ""
-    start_time: Optional[str] = None
-    end_time: Optional[str] = None
+    start_time: str | None = None
+    end_time: str | None = None
     status: str = "pending"
-    textbooks: List[int] = []
-    instructor_name: Optional[str] = None
-    instructor_id_card: Optional[str] = None
-    instructor_phone: Optional[str] = None
-    instructor_password: Optional[str] = None
-    company_id: Optional[int] = None
+    textbooks: list[int] = []
+    instructor_name: str | None = None
+    instructor_id_card: str | None = None
+    instructor_phone: str | None = None
+    instructor_password: str | None = None
+    company_id: int | None = None
     province: str = ""
     city: str = ""
-    manager_name: Optional[str] = None
-    manager_phone: Optional[str] = None
-    students: List[Dict] = []
+    manager_name: str | None = None
+    manager_phone: str | None = None
+    students: list[dict] = []
 
 
 class ClassUpdateRequest(BaseModel):
-    name: Optional[str] = None
-    location: Optional[str] = None
-    start_time: Optional[str] = None
-    end_time: Optional[str] = None
-    textbooks: Optional[List[int]] = None
-    courses: Optional[List[Dict[str, Any]]] = None
+    name: str | None = None
+    location: str | None = None
+    start_time: str | None = None
+    end_time: str | None = None
+    textbooks: list[int] | None = None
+    courses: list[dict[str, Any]] | None = None
 
 
 class CompanyCreateRequest(BaseModel):
@@ -179,11 +155,11 @@ class CompanyCreateRequest(BaseModel):
 
 class InstructorCreateRequest(BaseModel):
     name: str
-    id_card: Optional[str] = None
-    phone: Optional[str] = None
-    password: Optional[str] = None
-    company_id: Optional[int] = None
-    instructor_code: Optional[str] = None
+    id_card: str | None = None
+    phone: str | None = None
+    password: str | None = None
+    company_id: int | None = None
+    instructor_code: str | None = None
     province: str = ""
     city: str = ""
 
@@ -192,14 +168,14 @@ class InstructorCreateRequest(BaseModel):
 class PeopleFilterRequest(BaseModel):
     role: str = "student"
     keyword: str = ""
-    class_id: Optional[int] = None
-    status: Optional[str] = None
+    class_id: int | None = None
+    status: str | None = None
     page: int = 1
     page_size: int = 20
 
 
 class StudentImportRequest(BaseModel):
-    students: List[Dict[str, Any]] = []
+    students: list[dict[str, Any]] = []
 
 
 class InstructorPasswordResetRequest(BaseModel):
@@ -210,8 +186,8 @@ class PersonCreateRequest(BaseModel):
     name: str
     role: str = "student"
     phone: str = ""
-    id_card: Optional[str] = ""
-    company_id: Optional[int] = None
+    id_card: str | None = ""
+    company_id: int | None = None
     province: str = ""
     city: str = ""
 

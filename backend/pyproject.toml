@@ -5,3 +5,20 @@ markers = [
     "e2e: end-to-end full flow tests",
     "security: security boundary tests",
 ]
+
+[tool.ruff]
+# ========================
+# Ruff Linter Configuration
+# ========================
+lint.extend-select = ["F", "E", "W", "I", "UP"]
+lint.extend-ignore = [
+    "F403",   # star import — shared.py 合法导出，架构决策
+    "F405",   # may be undefined — 实为 shared.py 导出的 52 个合法名称
+]
+line-length = 120
+
+[tool.ruff.lint.per-file-ignores]
+"app/api/admin/shared.py" = []
+
+[tool.ruff.lint.isort]
+known-first-party = ["app"]

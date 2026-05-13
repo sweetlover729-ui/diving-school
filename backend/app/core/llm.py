@@ -2,12 +2,12 @@
 LLM Helper - OpenAI-compatible API wrapper
 Config loaded from database (llm_config module), not env vars.
 """
-import os
 import json
-import httpx
-import re
 import logging
-from typing import List, Dict, Optional, Any
+import re
+from typing import Any
+
+import httpx
 
 logger = logging.getLogger(__name__)
 
@@ -20,9 +20,9 @@ class LLMHelper:
         self.api_key: str = ""
         self.model: str = ""
         self.timeout: int = 120
-        self._client: Optional[httpx.AsyncClient] = None
+        self._client: httpx.AsyncClient | None = None
 
-    def configure(self, config: Dict[str, str]):
+    def configure(self, config: dict[str, str]):
         """从数据库配置加载（由 llm_config.db_get_llm_runtime_config 提供）"""
         self.api_url = config.get("llm_base_url", "")
         self.api_key = config.get("llm_api_key", "")
@@ -45,7 +45,7 @@ class LLMHelper:
 
     async def chat(
         self,
-        messages: List[Dict[str, str]],
+        messages: list[dict[str, str]],
         temperature: float = 0.3,
         max_tokens: int = 4096,
     ) -> str:
@@ -57,7 +57,7 @@ class LLMHelper:
             "Content-Type": "application/json",
             "Authorization": f"Bearer {self.api_key}",
         }
-        payload: Dict[str, Any] = {
+        payload: dict[str, Any] = {
             "model": self.model,
             "messages": messages,
             "temperature": temperature,
@@ -125,7 +125,7 @@ class LLMHelper:
             await self._client.aclose()
 
 
-_singleton: Optional[LLMHelper] = None
+_singleton: LLMHelper | None = None
 
 def get_llm_helper() -> LLMHelper:
     global _singleton

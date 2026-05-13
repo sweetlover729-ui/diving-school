@@ -3,25 +3,23 @@
 支持四级角色登录，班级时间范围验证
 安全增强：JWT Token + 密码强度校验 + 账户锁定
 """
-from datetime import datetime, timedelta, timezone
-from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from pydantic import BaseModel, field_validator
-from sqlalchemy import select, and_, func
-from sqlalchemy.ext.asyncio import AsyncSession
-from jose import JWTError, jwt
-import bcrypt
-import time
-import re
-from collections import defaultdict
 import logging
+import re
+import time
+from collections import defaultdict
+from datetime import datetime, timedelta, timezone
 
-from app.core.database import get_db
+import bcrypt
+from fastapi import APIRouter, Depends, HTTPException
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from jose import JWTError, jwt
+from pydantic import BaseModel, field_validator
+from sqlalchemy import and_, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.core.config import settings
-from app.models.class_system import (
-    User, Class, ClassMember, UserRole, ClassStatus
-)
+from app.core.database import get_db
+from app.models.class_system import Class, ClassMember, ClassStatus, User, UserRole
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +39,7 @@ LOGIN_WINDOW = 300  # 5分钟窗口
 LOCK_DURATION = 900  # 15分钟锁定
 
 
-def check_rate_limit(identifier: str) -> Optional[str]:
+def check_rate_limit(identifier: str) -> str | None:
     """检查登录频率限制"""
     now = time.time()
     lock = _account_locks.get(identifier)
@@ -80,7 +78,7 @@ security = HTTPBearer()
 # ===== 密码安全策略 =====
 MIN_PASSWORD_LENGTH = 8
 
-def validate_password_strength(password: str) -> Optional[str]:
+def validate_password_strength(password: str) -> str | None:
     """
     密码强度验证
     - 最少 8 位
@@ -148,7 +146,7 @@ def create_refresh_token(user_id: int, role: str) -> str:
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
 
-def decode_token(token: str) -> Optional[dict]:
+def decode_token(token: str) -> dict | None:
     """解码并验证 JWT token，返回 payload 或 None"""
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
@@ -190,7 +188,7 @@ async def get_current_user(
 async def get_current_class(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
-) -> Optional[Class]:
+) -> Class | None:
     """获取当前用户所属班级"""
     if user.role == UserRole.ADMIN:
         return None
@@ -234,10 +232,10 @@ async def check_class_access(
 
 class LoginRequest(BaseModel):
     """登录请求"""
-    name: Optional[str] = None
-    id_card: Optional[str] = None
-    phone: Optional[str] = None
-    password: Optional[str] = None
+    name: str | None = None
+    id_card: str | None = None
+    phone: str | None = None
+    password: str | None = None
     role: str  # admin/instructor/manager/student
 
     @field_validator('role')
@@ -253,17 +251,17 @@ class UserResponse(BaseModel):
     """用户响应"""
     id: int
     name: str
-    id_card: Optional[str]
-    phone: Optional[str]
+    id_card: str | None
+    phone: str | None
     role: str
-    avatar: Optional[str]
+    avatar: str | None
 
 
 class ClassResponse(BaseModel):
     """班级响应"""
     id: int
     name: str
-    location: Optional[str]
+    location: str | None
     start_time: datetime
     end_time: datetime
     status: str
@@ -272,11 +270,11 @@ class ClassResponse(BaseModel):
 class LoginResponse(BaseModel):
     """登录响应"""
     success: bool
-    token: Optional[str] = None
-    refresh_token: Optional[str] = None
-    user: Optional[UserResponse] = None
-    cls: Optional[ClassResponse] = None
-    message: Optional[str] = None
+    token: str | None = None
+    refresh_token: str | None = None
+    user: UserResponse | None = None
+    cls: ClassResponse | None = None
+    message: str | None = None
 
 
 class TokenRefreshRequest(BaseModel):
@@ -300,8 +298,8 @@ class ChangePasswordRequest(BaseModel):
 
 class UpdateProfileRequest(BaseModel):
     """更新个人信息请求"""
-    name: Optional[str] = None
-    phone: Optional[str] = None
+    name: str | None = None
+    phone: str | None = None
 
 
 # ===== API 路由 =====

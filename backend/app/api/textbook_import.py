@@ -1,14 +1,14 @@
 """教材导入API - 解析Word文档导入章节内容"""
 import io
 import re
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
-from sqlalchemy import select
+
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from sqlalchemy import text as sql_text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.admin.shared import require_admin
 from app.core.database import get_db
-from app.models.class_system import Textbook, Chapter
+from app.models.class_system import Chapter, Textbook
 
 router = APIRouter(prefix="/admin/textbooks", tags=["管理员教材导入"])
 
@@ -112,7 +112,7 @@ async def import_textbook_content(
                 continue
 
             style_name = para.style.name if para.style else ""
-            
+
             # 判断标题级别
             is_heading1 = style_name.startswith('Heading 1') or is_chapter_title(para_text)
             is_heading2 = style_name.startswith('Heading 2') or style_name.startswith('Heading 3') or is_section_title(para_text)
@@ -123,7 +123,7 @@ async def import_textbook_content(
                     if current_section:
                         current_chapter['sections'].append(current_section)
                     chapters_data.append(current_chapter)
-                
+
                 current_chapter = {
                     'title': para_text.replace('**', ''),
                     'sections': [],
@@ -131,18 +131,18 @@ async def import_textbook_content(
                 }
                 current_section = None
                 chapter_count += 1
-                
+
             elif is_heading2 and current_chapter:
                 # 保存上一小节
                 if current_section:
                     current_chapter['sections'].append(current_section)
-                
+
                 current_section = {
                     'title': para_text.replace('**', ''),
                     'content': ""
                 }
                 section_count += 1
-                
+
             elif current_chapter:
                 # 添加内容
                 if current_section:

@@ -1,21 +1,18 @@
 """
 教材查询统一工具 - 消除双轨查询混乱
 """
-from typing import List, Tuple, Optional
-from sqlalchemy import select, or_
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
-from app.models.class_system import (
-    ClassTextbook, Textbook, Chapter, Class
-)
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.models.class_system import ClassTextbook, Textbook
 
 
 async def get_class_textbooks(
     db: AsyncSession,
     class_id: int,
-    resource_type: Optional[str] = None
-) -> List[Textbook]:
+    resource_type: str | None = None
+) -> list[Textbook]:
     """
     获取班级教材（统一查询，已合并 pdf 和 interactive 为单表）
     """
@@ -39,8 +36,8 @@ async def get_class_textbooks(
 async def get_class_textbook_ids(
     db: AsyncSession,
     class_id: int,
-    resource_type: Optional[str] = None
-) -> List[int]:
+    resource_type: str | None = None
+) -> list[int]:
     """获取班级教材ID列表"""
     textbooks = await get_class_textbooks(db, class_id, resource_type)
     return [t.id for t in textbooks]
@@ -49,7 +46,7 @@ async def get_class_textbook_ids(
 async def get_class_textbook_pairs(
     db: AsyncSession,
     class_id: int
-) -> List[Tuple[int, str]]:
+) -> list[tuple[int, str]]:
     """获取班级教材 (id, type) 对列表（统一表）"""
     result = await db.execute(
         select(ClassTextbook).where(ClassTextbook.class_id == class_id)
@@ -78,13 +75,13 @@ async def assign_textbook_to_class(
         )
     )
     existing = result.scalar_one_or_none()
-    
+
     if existing:
         # 更新类型
         existing.resource_type = resource_type
         await db.commit()
         return existing
-    
+
     # 新建
     ct = ClassTextbook(
         class_id=class_id,

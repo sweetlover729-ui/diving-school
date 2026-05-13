@@ -1,14 +1,13 @@
 """
 学员档案导出
 """
-from datetime import datetime
-from typing import Optional
 import json
+from datetime import datetime
 
 
 def generate_student_report(student_data: dict, progress_data: dict, exam_records: list) -> dict:
     """生成学员学习报告"""
-    
+
     # 基本信息
     report = {
         "title": "消防潜水培训学习报告",
@@ -28,7 +27,7 @@ def generate_student_report(student_data: dict, progress_data: dict, exam_record
         "exam_records": exam_records,
         "progress": progress_data,
     }
-    
+
     return report
 
 
@@ -58,13 +57,13 @@ def export_to_text(data: dict) -> str:
         f"  通过次数: {data['summary'].get('passed_exams', 0)}",
         "",
     ]
-    
+
     if data.get("exam_records"):
         lines.append("考试记录:")
         for i, exam in enumerate(data["exam_records"], 1):
             lines.append(f"  {i}. {exam.get('exam_title', '')} - {exam.get('score', 0)}分")
         lines.append("")
-    
+
     lines.append("=" * 50)
-    
+
     return "\n".join(lines)

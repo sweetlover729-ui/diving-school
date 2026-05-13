@@ -46,7 +46,7 @@ async def create_class(
     db.add(cls)
     await db.commit()
     await db.refresh(cls)
-    
+
     # 添加教材
     for tb_id in (req.textbooks or []):
         await db.execute(
@@ -54,7 +54,7 @@ async def create_class(
             {"cid": cls.id, "tid": tb_id}
         )
     await db.commit()
-    
+
     # 创建教练
     if req.instructor_name and req.instructor_phone:
         pw = req.instructor_password or (req.instructor_id_card or "000000")[-6:]
@@ -75,7 +75,7 @@ async def create_class(
         cm = ClassMember(class_id=cls.id, user_id=instructor.id, role=UserRole.INSTRUCTOR)
         db.add(cm)
         await db.commit()
-    
+
     return {"id": cls.id, "name": cls.name, "status": cls.status.value}
 
 
@@ -89,14 +89,14 @@ async def get_class_detail(
     cls = await db.get(Class, class_id)
     if not cls:
         raise HTTPException(status_code=404, detail="班级不存在")
-    
+
     # 获取学员数
     member_result = await db.execute(
         sql_text("SELECT COUNT(*) FROM class_members WHERE class_id = :cid"),
         {"cid": class_id}
     )
     member_count = member_result.scalar() or 0
-    
+
     # 获取教材
     textbooks_result = await db.execute(
         sql_text("""
@@ -109,7 +109,7 @@ async def get_class_detail(
         {"cid": class_id}
     )
     textbooks = [dict(r._mapping) for r in textbooks_result.fetchall()]
-    
+
     # 获取互动式教材（统一表）
     interactive_result = await db.execute(
         sql_text("""
@@ -122,7 +122,7 @@ async def get_class_detail(
         {"cid": class_id}
     )
     interactive_textbooks = [dict(r._mapping) for r in interactive_result.fetchall()]
-    
+
     # 获取文书（class_documents 表暂未创建，使用 savepoint 兜底）
     try:
         async with db.begin_nested():
@@ -139,7 +139,7 @@ async def get_class_detail(
             documents = [dict(r._mapping) for r in docs_result.fetchall()]
     except Exception:
         documents = []
-    
+
     # 获取成员（前端依赖 data.members）
     members_result = await db.execute(
         sql_text("""
@@ -228,7 +228,7 @@ async def get_class_analytics(
     cls = await db.get(Class, class_id)
     if not cls:
         raise HTTPException(status_code=404, detail="班级不存在")
-    
+
     # 获取学员进度：用 chapter_progress + test_results 分别计算
     progress_result = await db.execute(
         sql_text("""
@@ -256,7 +256,7 @@ async def get_class_analytics(
         {"cid": class_id}
     )
     students = [dict(r._mapping) for r in progress_result.fetchall()]
-    
+
     return {
         "class_id": class_id,
         "class_name": cls.name,
@@ -357,7 +357,7 @@ async def list_class_members(
         sql += " AND cm.role = :role"
         params["role"] = role
     sql += " ORDER BY cm.joined_at"
-    
+
     result = await db.execute(sql_text(sql), params)
     return [dict(r._mapping) for r in result.fetchall()]
 
@@ -429,13 +429,13 @@ async def batch_import_students(
         id_card = s.get("id_card", "")
         pw = s.get("password", phone[-6:] if phone else "000000")
         pw_hash = bcrypt.hashpw(pw.encode(), bcrypt.gensalt()).decode()
-        
+
         # 检查是否已存在
         exist = await db.execute(
             select(User).where(User.phone == phone)
         )
         existing = exist.scalar_one_or_none()
-        
+
         if existing:
             uid = existing.id
         else:
@@ -445,12 +445,12 @@ async def batch_import_students(
             await db.commit()
             await db.refresh(u)
             uid = u.id
-        
+
         # 添加到班级
         cm = ClassMember(class_id=class_id, user_id=uid, role=UserRole.STUDENT)
         db.add(cm)
         imported.append({"name": name, "user_id": uid})
-    
+
     await db.commit()
     return {"imported": imported, "count": len(imported)}
 

@@ -8,17 +8,14 @@ Usage:
     parser = ContentParserV2(llm=llm_helper)
     nodes = await parser.parse_from_docx(filepath, textbook_id, category_id)
 """
-import os
-import json
-import re
 import hashlib
 import logging
-from datetime import datetime, timezone
-from typing import List, Dict, Any, Optional
-from dataclasses import dataclass, field, asdict
+import re
+from dataclasses import dataclass, field
+from typing import Any
 
-from docx import Document
 import fitz  # PyMuPDF
+from docx import Document
 
 logger = logging.getLogger(__name__)
 
@@ -81,16 +78,16 @@ class ParsedNode:
     """Intermediate representation of a parsed content node"""
     title: str
     content_type: str = "section"
-    learning_objectives: List[str] = field(default_factory=list)
-    key_concepts: List[str] = field(default_factory=list)
+    learning_objectives: list[str] = field(default_factory=list)
+    key_concepts: list[str] = field(default_factory=list)
     difficulty_level: str = "beginner"
-    prerequisites: List[str] = field(default_factory=list)
-    safety_notes: List[str] = field(default_factory=list)
+    prerequisites: list[str] = field(default_factory=list)
+    safety_notes: list[str] = field(default_factory=list)
     summary: str = ""
     content_raw: str = ""
-    page_start: Optional[int] = None
-    page_end: Optional[int] = None
-    parent_title: Optional[str] = None
+    page_start: int | None = None
+    page_end: int | None = None
+    parent_title: str | None = None
     level: int = 0
     sort_order: int = 0
     source_location: str = ""
@@ -100,8 +97,8 @@ class ContentParserV2:
     """LLM-assisted textbook content parser"""
 
     def __init__(self, llm_helper=None):
-        from app.core.llm import get_llm_helper
         from app.core import llm_config
+        from app.core.llm import get_llm_helper
         self.llm = llm_helper or get_llm_helper()
         self.llm_config = llm_config
         self._chunk_size = 6000
@@ -113,7 +110,7 @@ class ContentParserV2:
         textbook_id: int,
         category_id: int,
         db_session: Any = None,
-    ) -> List[ParsedNode]:
+    ) -> list[ParsedNode]:
         """Full parse pipeline: DOCX -> structured nodes"""
         # Step 1: Extract raw text chunks
         text = self._extract_docx_text(filepath)
@@ -158,7 +155,7 @@ class ContentParserV2:
         textbook_id: int,
         category_id: int,
         db_session: Any = None,
-    ) -> List[ParsedNode]:
+    ) -> list[ParsedNode]:
         """Full parse pipeline: PDF -> structured nodes"""
         pages = self._extract_pdf_pages(filepath)
         if not pages:
@@ -197,9 +194,9 @@ class ContentParserV2:
         self,
         chunk_text: str,
         heading_hint: str = "",
-        page_start: Optional[int] = None,
+        page_start: int | None = None,
         chunk_index: int = 0,
-    ) -> List[ParsedNode]:
+    ) -> list[ParsedNode]:
         """Step 2: Send chunk to LLM for structure analysis"""
         # Trim to avoid exceeding context window
         max_chars = 8000
@@ -268,7 +265,7 @@ class ContentParserV2:
                     paragraphs.append(text)
         return "\n\n".join(paragraphs)
 
-    def _extract_pdf_pages(self, filepath: str) -> List[Dict]:
+    def _extract_pdf_pages(self, filepath: str) -> list[dict]:
         """Extract text per page from PDF"""
         pages = []
         try:
@@ -283,8 +280,8 @@ class ContentParserV2:
         return pages
 
     def _chunk_by_headings(
-        self, text: str, page_map: Optional[Dict[int, int]] = None
-    ) -> List[Dict]:
+        self, text: str, page_map: dict[int, int] | None = None
+    ) -> list[dict]:
         """Split text into chunks at heading boundaries"""
         chunks = []
         # Split on markdown-style headings or Chinese heading patterns
@@ -348,7 +345,7 @@ class ContentParserV2:
 
         return chunks
 
-    def _post_process(self, nodes: List[ParsedNode], textbook_id: int) -> List[ParsedNode]:
+    def _post_process(self, nodes: list[ParsedNode], textbook_id: int) -> list[ParsedNode]:
         """Clean up and enhance parsed nodes"""
         for i, node in enumerate(nodes):
             node.sort_order = i * 10

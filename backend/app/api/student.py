@@ -1,28 +1,36 @@
 """
 学员API - 班级制培训管理系统
 """
-from datetime import datetime, timezone
-from typing import Optional, List
-from fastapi import APIRouter, Depends, HTTPException, Body
-from pydantic import BaseModel
-from sqlalchemy import select, and_
-from sqlalchemy.ext.asyncio import AsyncSession
 import json
-import time
+from datetime import datetime, timezone
 
-from app.core.database import get_db
+from fastapi import APIRouter, Body, Depends, HTTPException
+from pydantic import BaseModel
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.api.admin.shared import require_student
+from app.api.auth_v2 import get_current_class, get_current_user
 from app.core.config import settings
+from app.core.database import get_db
 from app.core.textbook_utils import (
-    get_class_textbooks, get_class_textbook_ids, get_class_textbook_pairs,
-    assign_textbook_to_class, remove_textbook_from_class
+    get_class_textbook_ids,
+    get_class_textbooks,
 )
 from app.models.class_system import (
-    User, Class, ClassMember, Textbook, Chapter, Question, Test, TestResult,
-    ReadingProgress, UserRole, ClassStatus, TestType, TestStatus, QuestionType,
-    ClassTextbook, QAQuestion
+    Chapter,
+    Class,
+    ClassTextbook,
+    QAQuestion,
+    Question,
+    QuestionType,
+    ReadingProgress,
+    Test,
+    TestResult,
+    TestStatus,
+    Textbook,
+    User,
 )
-from app.api.auth_v2 import get_current_user, get_current_class
-from app.api.admin.shared import require_student
 
 router = APIRouter(
     prefix="/student",
@@ -41,7 +49,7 @@ async def list_textbooks(
 ):
     """可学习教材列表（统一教材查询）"""
     textbooks = await get_class_textbooks(db, cls.id)
-    
+
     # 获取阅读进度
     progress_data = []
     for t in textbooks:
@@ -52,7 +60,7 @@ async def list_textbooks(
             )
         )
         rp = result.scalar_one_or_none()
-        
+
         progress_data.append({
             "id": t.id,
             "name": t.name,
@@ -63,7 +71,7 @@ async def list_textbooks(
             "progress": rp.progress if rp else 0,
             "current_page": rp.current_page if rp else 0
         })
-    
+
     return progress_data
 
 
@@ -80,18 +88,18 @@ async def get_textbook(
     PDF教材从数据库读取章节
     """
     import os
-    
+
     textbook_ids = await get_class_textbook_ids(db, cls.id)
-    
+
     if textbook_id not in textbook_ids:
         raise HTTPException(status_code=403, detail="该教材不在班级范围内")
-    
+
     result = await db.execute(select(Textbook).where(Textbook.id == textbook_id))
     t = result.scalar_one_or_none()
-    
+
     if not t:
         raise HTTPException(status_code=404, detail="教材不存在")
-    
+
     # 获取阅读进度
     result = await db.execute(
         select(ReadingProgress).where(
@@ -100,14 +108,14 @@ async def get_textbook(
         )
     )
     rp = result.scalar_one_or_none()
-    
+
     # 检查是否是互动式教材
     json_path = f"{settings.INTERACTIVE_DATA_DIR}/{textbook_id}_interactive.json"
-    
+
     if os.path.exists(json_path):
         # 互动式教材：从 JSON 文件读取
         try:
-            with open(json_path, 'r', encoding='utf-8') as f:
+            with open(json_path, encoding='utf-8') as f:
                 data = json.load(f)
             return {
                 "id": str(t.id),
@@ -130,7 +138,7 @@ async def get_textbook(
             select(Chapter).where(Chapter.textbook_id == textbook_id).order_by(Chapter.sort_order)
         )
         chapters = result.scalars().all()
-        
+
         return {
             "id": t.id,
             "name": t.name,
@@ -168,7 +176,7 @@ async def get_chapter_content(
         )
     )
     pdf_ids = [row[0] for row in pdf_result.all()]
-    
+
     interactive_result = await db.execute(
         select(ClassTextbook.textbook_id).where(
             ClassTextbook.class_id == cls.id,
@@ -176,12 +184,12 @@ async def get_chapter_content(
         )
     )
     interactive_ids = [row[0] for row in interactive_result.all()]
-    
+
     textbook_ids = list(set(pdf_ids + interactive_ids))
-    
+
     if textbook_id not in textbook_ids:
         raise HTTPException(status_code=403, detail="该教材不在班级范围内")
-    
+
     result = await db.execute(
         select(Chapter).where(
             Chapter.id == chapter_id,
@@ -189,10 +197,10 @@ async def get_chapter_content(
         )
     )
     chapter = result.scalar_one_or_none()
-    
+
     if not chapter:
         raise HTTPException(status_code=404, detail="章节不存在")
-    
+
     return {
         "id": chapter.id,
         "title": chapter.title,
@@ -204,10 +212,10 @@ async def get_chapter_content(
 
 class ReadingProgressRequest(BaseModel):
     textbook_id: int
-    chapter_id: Optional[int] = None
+    chapter_id: int | None = None
     current_page: int
     duration: int  # 本次阅读时长（秒）
-    progress_percent: Optional[int] = None  # 互动式教材前端直接传百分比
+    progress_percent: int | None = None  # 互动式教材前端直接传百分比
 
 
 @router.post("/reading/progress")
@@ -226,22 +234,23 @@ async def update_reading_progress(
     # 也兼容旧方式的textbooks字段
     textbook_ids = cls.get_textbook_ids()
     allowed_ids = list(set(allowed_ids + textbook_ids))
-    
+
     if request.textbook_id not in allowed_ids:
         raise HTTPException(status_code=403, detail="该教材不在班级范围内")
-    
+
     result = await db.execute(select(Textbook).where(Textbook.id == request.textbook_id))
     t = result.scalar_one_or_none()
-    
+
     if not t:
         raise HTTPException(status_code=404, detail="教材不存在")
-    
+
     # 计算进度百分比 — 互动式教材前端可直接传百分比，否则后端计算
     if request.progress_percent is not None:
         progress = request.progress_percent
     elif t.has_interactive:
         # 互动式教材：current_page=完成单元数，基数从JSON文件获取
-        import os, json as _json
+        import json as _json
+        import os
         interactive_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'static', 'interactive')
         total_units = 0
         for fname in os.listdir(interactive_dir):
@@ -259,7 +268,7 @@ async def update_reading_progress(
         progress = min(100, int((request.current_page / total_units) * 100)) if total_units > 0 else 0
     else:
         progress = int((request.current_page / t.total_pages) * 100) if t.total_pages > 0 else 0
-    
+
     # 查找或创建进度记录
     result = await db.execute(
         select(ReadingProgress).where(
@@ -268,7 +277,7 @@ async def update_reading_progress(
         )
     )
     rp = result.scalar_one_or_none()
-    
+
     if rp:
         rp.current_page = request.current_page
         rp.progress = progress
@@ -286,9 +295,9 @@ async def update_reading_progress(
             last_read_at=datetime.now(timezone.utc).replace(tzinfo=None)
         )
         db.add(rp)
-    
+
     await db.commit()
-    
+
     return {"success": True, "progress": progress}
 
 
@@ -305,7 +314,7 @@ async def get_reading_progress(
         .where(ReadingProgress.user_id == user.id)
     )
     readings = result.all()
-    
+
     return [
         {
             "textbook_id": rp.textbook_id,
@@ -329,7 +338,7 @@ async def list_tests(
 ):
     """测验列表"""
     now = datetime.now(timezone.utc).replace(tzinfo=None)
-    
+
     result = await db.execute(
         select(Test).where(
             Test.class_id == cls.id,
@@ -337,7 +346,7 @@ async def list_tests(
         ).order_by(Test.created_at.desc())
     )
     tests = result.scalars().all()
-    
+
     tests_data = []
     for t in tests:
         # 检查是否已提交
@@ -348,14 +357,14 @@ async def list_tests(
             )
         )
         tr = result.scalar_one_or_none()
-        
+
         # 检查时间范围
         is_available = True
         if t.start_time and t.start_time > now:
             is_available = False
         if t.end_time and t.end_time < now:
             is_available = False
-        
+
         tests_data.append({
             "id": t.id,
             "title": t.title,
@@ -369,7 +378,7 @@ async def list_tests(
             "is_completed": tr is not None,
             "score": tr.score if tr else None
         })
-    
+
     return tests_data
 
 
@@ -385,13 +394,13 @@ async def get_test(
         select(Test).where(Test.id == test_id, Test.class_id == cls.id)
     )
     test = result.scalar_one_or_none()
-    
+
     if not test:
         raise HTTPException(status_code=404, detail="测验不存在")
-    
+
     if test.status != TestStatus.PUBLISHED:
         raise HTTPException(status_code=403, detail="测验未发布")
-    
+
     # 检查是否已提交
     result = await db.execute(
         select(TestResult).where(
@@ -400,17 +409,17 @@ async def get_test(
         )
     )
     tr = result.scalar_one_or_none()
-    
+
     if tr and tr.submitted_at:
         raise HTTPException(status_code=400, detail="您已完成该测验")
-    
+
     # 获取题目
     question_ids = test.get_question_ids()
     result = await db.execute(
         select(Question).where(Question.id.in_(question_ids))
     )
     questions = result.scalars().all()
-    
+
     return {
         "id": test.id,
         "title": test.title,
@@ -435,7 +444,7 @@ class StartTestRequest(BaseModel):
 
 
 class SubmitTestRequest(BaseModel):
-    answers: List[dict]  # [{question_id, answer}]
+    answers: list[dict]  # [{question_id, answer}]
 
 
 @router.post("/tests/{test_id}/start")
@@ -450,10 +459,10 @@ async def start_test(
         select(Test).where(Test.id == test_id, Test.class_id == cls.id)
     )
     test = result.scalar_one_or_none()
-    
+
     if not test:
         raise HTTPException(status_code=404, detail="测验不存在")
-    
+
     # 检查是否已提交
     result = await db.execute(
         select(TestResult).where(
@@ -462,10 +471,10 @@ async def start_test(
         )
     )
     tr = result.scalar_one_or_none()
-    
+
     if tr:
         raise HTTPException(status_code=400, detail="您已完成该测验")
-    
+
     # 创建答题记录（用于计时）
     tr = TestResult(
         test_id=test_id,
@@ -476,7 +485,7 @@ async def start_test(
     )
     db.add(tr)
     await db.commit()
-    
+
     return {
         "success": True,
         "start_time": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
@@ -497,10 +506,10 @@ async def submit_test(
         select(Test).where(Test.id == test_id, Test.class_id == cls.id)
     )
     test = result.scalar_one_or_none()
-    
+
     if not test:
         raise HTTPException(status_code=404, detail="测验不存在")
-    
+
     # 检查答题记录
     result = await db.execute(
         select(TestResult).where(
@@ -509,7 +518,7 @@ async def submit_test(
         )
     )
     tr = result.scalar_one_or_none()
-    
+
     if not tr:
         # 自动创建答题记录（兼容直接提交的情况）
         tr = TestResult(
@@ -520,27 +529,27 @@ async def submit_test(
         )
         db.add(tr)
         await db.flush()
-    
+
     if tr.submitted_at:
         raise HTTPException(status_code=400, detail="您已提交答案")
-    
+
     # 获取题目
     question_ids = test.get_question_ids()
     result = await db.execute(
         select(Question).where(Question.id.in_(question_ids))
     )
     questions = result.scalars().all()
-    
+
     # 计算成绩
     score = 0
     per_question_score = test.total_score / len(questions) if questions else 5
-    
+
     for q in questions:
         for answer in request.answers:
             if answer['question_id'] == q.id:
                 correct_answer = q.get_answer()
                 user_answer = answer['answer']
-                
+
                 # 判断是否正确
                 if q.question_type == QuestionType.SINGLE:
                     if user_answer == correct_answer:
@@ -551,15 +560,15 @@ async def submit_test(
                 elif q.question_type == QuestionType.JUDGE:
                     if user_answer == correct_answer:
                         score += per_question_score
-    
+
     # 更新记录
     tr.answers = json.dumps(request.answers)
     tr.score = int(score)
     tr.submitted_at = datetime.now(timezone.utc).replace(tzinfo=None)
     tr.is_graded = True
-    
+
     await db.commit()
-    
+
     return {
         "success": True,
         "score": int(score),
@@ -586,7 +595,7 @@ async def get_my_scores(
         ).order_by(TestResult.submitted_at.desc())
     )
     results = result.all()
-    
+
     return [
         {
             "test_id": tr.test_id,
@@ -619,21 +628,21 @@ async def get_test_detail(
         )
     )
     row = result.one_or_none()
-    
+
     if not row:
         raise HTTPException(status_code=404, detail="测验记录不存在")
-    
+
     tr, t = row
-    
+
     # 获取题目和用户答案
     question_ids = t.get_question_ids()
     result = await db.execute(
         select(Question).where(Question.id.in_(question_ids))
     )
     questions = result.scalars().all()
-    
+
     user_answers = json.loads(tr.answers) if tr.answers else []
-    
+
     return {
         "test": {
             "id": t.id,
@@ -678,24 +687,24 @@ async def get_wrong_answers(
         )
     )
     test_results = result.all()
-    
+
     wrong_questions = []
-    
+
     for tr, t in test_results:
         question_ids = t.get_question_ids()
         result = await db.execute(
             select(Question).where(Question.id.in_(question_ids))
         )
         questions = result.scalars().all()
-        
+
         user_answers = json.loads(tr.answers) if tr.answers else []
-        
+
         for q in questions:
             for answer in user_answers:
                 if answer['question_id'] == q.id:
                     correct_answer = q.get_answer()
                     user_answer = answer['answer']
-                    
+
                     # 判断是否错误
                     is_wrong = False
                     if q.question_type == QuestionType.SINGLE:
@@ -704,7 +713,7 @@ async def get_wrong_answers(
                         is_wrong = isinstance(user_answer, list) and set(user_answer) != set(correct_answer)
                     elif q.question_type == QuestionType.JUDGE:
                         is_wrong = user_answer != correct_answer
-                    
+
                     if is_wrong:
                         wrong_questions.append({
                             "id": q.id,
@@ -715,7 +724,7 @@ async def get_wrong_answers(
                             "user_answer": user_answer,
                             "explanation": q.explanation
                         })
-    
+
     return wrong_questions
 
 
@@ -752,22 +761,22 @@ async def get_dashboard(
         select(ReadingProgress).where(ReadingProgress.user_id == user.id)
     )
     readings = result.scalars().all()
-    
+
     avg_reading_progress = sum(r.progress for r in readings) / len(readings) if readings else 0
-    
+
     # 测验完成情况
     result = await db.execute(
         select(Test).where(Test.class_id == cls.id, Test.status == TestStatus.PUBLISHED)
     )
     all_tests = result.scalars().all()
-    
+
     result = await db.execute(
         select(TestResult).where(TestResult.user_id == user.id, TestResult.is_graded == True)
     )
     completed = result.scalars().all()
-    
+
     avg_score = sum(r.score for r in completed) / len(completed) if completed else 0
-    
+
     return {
         "class_name": cls.name,
         "reading_progress": round(avg_reading_progress, 1),

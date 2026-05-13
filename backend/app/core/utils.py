@@ -1,10 +1,9 @@
 """
 工具函数模块
 """
-from datetime import datetime, timezone, timedelta
-from typing import Optional
 import hashlib
 import secrets
+from datetime import datetime, timedelta, timezone
 
 
 def generate_random_token(length: int = 32) -> str:
@@ -17,14 +16,14 @@ def hash_string(text: str) -> str:
     return hashlib.sha256(text.encode()).hexdigest()
 
 
-def format_datetime(dt: Optional[datetime] = None) -> str:
+def format_datetime(dt: datetime | None = None) -> str:
     """格式化日期时间"""
     if dt is None:
         dt = datetime.now(timezone.utc).replace(tzinfo=None)
     return dt.strftime("%Y-%m-%d %H:%M:%S")
 
 
-def format_date(dt: Optional[datetime] = None) -> str:
+def format_date(dt: datetime | None = None) -> str:
     """格式化日期"""
     if dt is None:
         dt = datetime.now(timezone.utc).replace(tzinfo=None)
@@ -36,14 +35,14 @@ def parse_datetime(date_str: str) -> datetime:
     return datetime.fromisoformat(date_str)
 
 
-def get_week_range(date: Optional[datetime] = None) -> tuple[datetime, datetime]:
+def get_week_range(date: datetime | None = None) -> tuple[datetime, datetime]:
     """获取本周日期范围"""
     if date is None:
         date = datetime.now(timezone.utc).replace(tzinfo=None)
-    
+
     start = date - timedelta(days=date.weekday())
     end = start + timedelta(days=6)
-    
+
     return start, end
 
 

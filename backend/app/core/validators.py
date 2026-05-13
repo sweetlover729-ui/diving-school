@@ -2,7 +2,6 @@
 数据验证器
 """
 import re
-from typing import Optional
 
 
 def validate_phone(phone: str) -> bool:
@@ -17,7 +16,7 @@ def validate_email(email: str) -> bool:
     return bool(re.match(pattern, email))
 
 
-def validate_password(password: str) -> tuple[bool, Optional[str]]:
+def validate_password(password: str) -> tuple[bool, str | None]:
     """
     验证密码强度
     返回: (是否有效, 错误信息)
@@ -29,7 +28,7 @@ def validate_password(password: str) -> tuple[bool, Optional[str]]:
     return True, None
 
 
-def validate_username(username: str) -> tuple[bool, Optional[str]]:
+def validate_username(username: str) -> tuple[bool, str | None]:
     """
     验证用户名
     """

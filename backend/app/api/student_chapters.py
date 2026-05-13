@@ -3,17 +3,30 @@
 """
 import json
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException, Body
+
+from fastapi import APIRouter, Body, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.auth_v2 import get_current_user
 from app.core.database import get_db
-from app.core.textbook_utils import get_class_textbook_ids, get_class_textbooks
+from app.core.textbook_utils import get_class_textbook_ids
 from app.models.class_system import (
-    User, UserRole, ClassMember, Chapter, ChapterProgress, ChapterProgressStatus,
-    ChapterExercise, Question, Textbook, ChapterNote, ChapterBookmark, Class,
-    LearningPath, TestResult
+    Chapter,
+    ChapterBookmark,
+    ChapterExercise,
+    ChapterNote,
+    ChapterProgress,
+    ChapterProgressStatus,
+    Class,
+    ClassMember,
+    LearningPath,
+    Question,
+    Test,
+    TestResult,
+    Textbook,
+    User,
+    UserRole,
 )
 
 router = APIRouter(prefix="/student/chapters", tags=["学员章节学习"])
@@ -46,7 +59,7 @@ async def list_chapters(
     textbook_ids = await get_class_textbook_ids(db, class_id)
     if not textbook_ids:
         return []
-    
+
     # 获取第一本分配的教材
     result = await db.execute(
         select(Textbook).where(Textbook.id.in_(textbook_ids), Textbook.is_active == True).limit(1)
@@ -54,7 +67,7 @@ async def list_chapters(
     textbook = result.scalar_one_or_none()
     if not textbook:
         return []
-    
+
     result = await db.execute(
         select(Chapter).where(
             Chapter.textbook_id == textbook.id,
@@ -62,7 +75,7 @@ async def list_chapters(
         ).order_by(Chapter.sort_order)
     )
     chapters = result.scalars().all()
-    
+
     result = await db.execute(
         select(ChapterProgress).where(
             ChapterProgress.user_id == user.id,
@@ -71,14 +84,14 @@ async def list_chapters(
     )
     progress_list = result.scalars().all()
     progress_map = {p.chapter_id: p for p in progress_list}
-    
+
     output = []
     for ch in chapters:
         result_sections = await db.execute(
             select(Chapter).where(Chapter.parent_id == ch.id).order_by(Chapter.sort_order)
         )
         sections = result_sections.scalars().all()
-        
+
         section_list = []
         for sec in sections:
             p = progress_map.get(sec.id)
@@ -87,13 +100,13 @@ async def list_chapters(
                 "title": sec.title,
                 "status": p.status.value if p else "locked"
             })
-        
+
         output.append({
             "id": ch.id,
             "title": ch.title,
             "sections": section_list
         })
-    
+
     return output
 
 
@@ -115,7 +128,7 @@ async def get_progress_summary(
         )
     )
     progress_list = result.scalars().all()
-    
+
     # 动态计算总章节数
     textbook_ids = await get_class_textbook_ids(db, class_id)
     if textbook_ids:
@@ -128,16 +141,16 @@ async def get_progress_summary(
         total_sections = len(result.scalars().all()) or 72
     else:
         total_sections = 72
-    
+
     # 弹性解锁：waiting_test 也计为完成
-    completed = sum(1 for p in progress_list if p.status in 
+    completed = sum(1 for p in progress_list if p.status in
                     (ChapterProgressStatus.COMPLETED, ChapterProgressStatus.WAITING_TEST))
     reading_done = sum(1 for p in progress_list if p.status == ChapterProgressStatus.READING_DONE)
     practicing = sum(1 for p in progress_list if p.status == ChapterProgressStatus.PRACTICING)
     waiting_test = sum(1 for p in progress_list if p.status == ChapterProgressStatus.WAITING_TEST)
     self_test_completed = sum(1 for p in progress_list if p.status == ChapterProgressStatus.COMPLETED)
     total_time = sum(p.total_reading_time for p in progress_list)
-    
+
     return {
         "total_sections": total_sections,
         "completed": completed,
@@ -161,21 +174,21 @@ async def get_pdf_textbook(
     user: User = Depends(get_current_user)
 ):
     """获取PDF教材"""
-    from app.models.class_system import TextbookPage, StudentPDFProgress
-    
+    from app.models.class_system import StudentPDFProgress, TextbookPage
+
     pdf_ids = await get_class_textbook_ids(db, class_id, resource_type='pdf')
-    
+
     if not pdf_ids:
         return {"textbook": None, "pages": [], "last_page": 0}
-    
+
     result = await db.execute(
         select(Textbook).where(Textbook.id.in_(pdf_ids), Textbook.is_active == True).limit(1)
     )
     textbook = result.scalar_one_or_none()
-    
+
     if not textbook:
         return {"textbook": None, "pages": [], "last_page": 0}
-    
+
     result = await db.execute(
         select(TextbookPage).where(
             TextbookPage.textbook_id == textbook.id,
@@ -183,7 +196,7 @@ async def get_pdf_textbook(
         ).order_by(TextbookPage.page_number)
     )
     pages = result.scalars().all()
-    
+
     result = await db.execute(
         select(StudentPDFProgress).where(
             StudentPDFProgress.user_id == user.id,
@@ -192,7 +205,7 @@ async def get_pdf_textbook(
         )
     )
     progress = result.scalar_one_or_none()
-    
+
     return {
         "textbook": {"id": textbook.id, "name": textbook.name},
         "pages": [{"id": p.id, "page_number": p.page_number, "url": p.image_url} for p in pages],
@@ -209,12 +222,12 @@ async def update_pdf_progress(
 ):
     """更新PDF阅读进度"""
     from app.models.class_system import StudentPDFProgress
-    
+
     result = await db.execute(select(Textbook).where(Textbook.is_active == True).limit(1))
     textbook = result.scalar_one_or_none()
     if not textbook:
         return {"success": False}
-    
+
     result = await db.execute(
         select(StudentPDFProgress).where(
             StudentPDFProgress.user_id == user.id,
@@ -223,7 +236,7 @@ async def update_pdf_progress(
         )
     )
     progress = result.scalar_one_or_none()
-    
+
     if progress:
         progress.current_page = data.get("current_page", 0)
         progress.total_pages = data.get("total_pages", 0)
@@ -234,7 +247,7 @@ async def update_pdf_progress(
             total_pages=data.get("total_pages", 0)
         )
         db.add(progress)
-    
+
     await db.commit()
     return {"success": True}
 
@@ -257,11 +270,11 @@ async def search_content(
     """搜索章节内容"""
     if not q or len(q) < 2:
         raise HTTPException(status_code=400, detail="关键词至少2个字符")
-    
+
     textbook_ids = await get_class_textbook_ids(db, class_id)
     if not textbook_ids:
         return []
-    
+
     result = await db.execute(
         select(Chapter).where(
             Chapter.textbook_id.in_(textbook_ids),
@@ -316,7 +329,7 @@ async def get_certificate(
     # 获取班级名称
     result = await db.execute(select(Class).where(Class.id == class_id))
     cls_obj = result.scalar_one_or_none()
-    
+
     # 获取平均成绩
     result = await db.execute(
         select(TestResult).join(Test).where(
@@ -413,7 +426,7 @@ async def get_learning_path(
         select(LearningPath).where(LearningPath.user_id == user.id)
     )
     path = result.scalar_one_or_none()
-    
+
     if path:
         return {
             "path_type": path.path_type,
@@ -421,13 +434,13 @@ async def get_learning_path(
             "current_stage": path.current_stage,
             "fast_track_skipped": json.loads(path.fast_track_skipped) if path.fast_track_skipped else []
         }
-    
+
     # 自动评估：根据历史成绩分配路径
     result = await db.execute(
         select(TestResult).where(TestResult.user_id == user.id)
     )
     test_results = result.scalars().all()
-    
+
     if not test_results:
         # 新学员，默认常规路径
         path_type = "normal"
@@ -435,7 +448,7 @@ async def get_learning_path(
     else:
         scores = [r.score for r in test_results if r.score is not None]
         avg_score = sum(scores) / len(scores) if scores else 0
-        
+
         if avg_score >= 90:
             path_type = "fast"
             reason = f"成绩优秀（平均{round(avg_score)}分），进入快速通道"
@@ -445,7 +458,7 @@ async def get_learning_path(
         else:
             path_type = "normal"
             reason = f"常规路径（平均{round(avg_score)}分）"
-    
+
     # 保存路径
     path = LearningPath(
         user_id=user.id, class_id=class_id,
@@ -453,7 +466,7 @@ async def get_learning_path(
     )
     db.add(path)
     await db.commit()
-    
+
     return {
         "path_type": path_type,
         "assigned_reason": reason,
@@ -476,7 +489,7 @@ async def reassess_learning_path(
     if path:
         await db.delete(path)
         await db.commit()
-    
+
     # 重新评估
     return await get_learning_path(class_id, db, user)
 # 章节内容
@@ -518,7 +531,7 @@ async def save_note(
     """保存/更新笔记"""
     note_id = data.get("id")
     content = data.get("content", "")
-    
+
     if note_id:
         note = await db.get(ChapterNote, note_id)
         if note and note.user_id == user.id:
@@ -526,7 +539,7 @@ async def save_note(
             note.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
             await db.commit()
             return {"success": True, "id": note.id}
-    
+
     note = ChapterNote(user_id=user.id, class_id=class_id, chapter_id=chapter_id, content=content)
     db.add(note)
     await db.commit()
@@ -617,7 +630,7 @@ async def get_chapter_content(
     chapter = await db.get(Chapter, chapter_id)
     if not chapter:
         raise HTTPException(status_code=404, detail="章节不存在")
-    
+
     result = await db.execute(
         select(ChapterProgress).where(
             ChapterProgress.user_id == user.id,
@@ -626,7 +639,7 @@ async def get_chapter_content(
         )
     )
     progress = result.scalar_one_or_none()
-    
+
     # 解锁检查
     if chapter.parent_id and (not progress or progress.status == ChapterProgressStatus.LOCKED):
         prev = await db.execute(
@@ -645,7 +658,7 @@ async def get_chapter_content(
             ).scalar_one_or_none()
             if not prev_p or prev_p.status not in (ChapterProgressStatus.COMPLETED, ChapterProgressStatus.WAITING_TEST):
                 raise HTTPException(status_code=403, detail="请先完成上一小节")
-    
+
     return {
         "id": chapter.id,
         "title": chapter.title,
@@ -669,7 +682,7 @@ async def start_reading(
     chapter = await db.get(Chapter, chapter_id)
     if not chapter:
         raise HTTPException(status_code=404, detail="章节不存在")
-    
+
     result = await db.execute(
         select(ChapterProgress).where(
             ChapterProgress.user_id == user.id,
@@ -678,7 +691,7 @@ async def start_reading(
         )
     )
     progress = result.scalar_one_or_none()
-    
+
     now = datetime.now(timezone.utc).replace(tzinfo=None)
     if not progress:
         progress = ChapterProgress(
@@ -689,7 +702,7 @@ async def start_reading(
     elif progress.status == ChapterProgressStatus.LOCKED:
         progress.status = ChapterProgressStatus.READING
         progress.reading_start_at = now
-    
+
     await db.commit()
     return {"success": True, "message": "开始阅读"}
 
@@ -714,16 +727,16 @@ async def update_reading_progress(
     progress = result.scalar_one_or_none()
     if not progress:
         raise HTTPException(status_code=400, detail="请先开始阅读")
-    
+
     progress.total_reading_time += reading_time
     progress.reading_pages = max(progress.reading_pages, current_page)
     progress.last_updated = datetime.now(timezone.utc).replace(tzinfo=None)
-    
+
     chapter = await db.get(Chapter, chapter_id)
     if chapter and chapter.page_end and current_page >= chapter.page_end:
         progress.status = ChapterProgressStatus.READING_DONE
         progress.reading_done_at = datetime.now(timezone.utc).replace(tzinfo=None)
-    
+
     await db.commit()
     return {"success": True, "status": progress.status.value}
 
@@ -746,7 +759,7 @@ async def finish_reading(
     progress = result.scalar_one_or_none()
     if not progress:
         raise HTTPException(status_code=400, detail="未开始阅读")
-    
+
     progress.status = ChapterProgressStatus.PRACTICING
     progress.reading_done_at = datetime.now(timezone.utc).replace(tzinfo=None)
     await db.commit()
@@ -773,7 +786,7 @@ async def get_chapter_exercises(
         )
     )
     progress = result.scalar_one_or_none()
-    
+
     allowed_statuses = [
         ChapterProgressStatus.READING_DONE,
         ChapterProgressStatus.PRACTICING,
@@ -783,12 +796,12 @@ async def get_chapter_exercises(
     ]
     if not progress or progress.status not in allowed_statuses:
         raise HTTPException(status_code=403, detail="请先完成章节阅读")
-    
+
     result = await db.execute(
         select(ChapterExercise).where(ChapterExercise.chapter_id == chapter_id).order_by(ChapterExercise.sort_order)
     )
     exercises = result.scalars().all()
-    
+
     questions = []
     for ex in exercises:
         q = await db.get(Question, ex.question_id)
@@ -798,7 +811,7 @@ async def get_chapter_exercises(
                 "content": q.content,
                 "options": q.get_options()
             })
-    
+
     return {"chapter_id": chapter_id, "questions": questions}
 
 
@@ -828,31 +841,31 @@ async def submit_exercises(
         )
     )
     progress = result.scalar_one_or_none()
-    
+
     if not progress or progress.status != ChapterProgressStatus.PRACTICING:
         raise HTTPException(status_code=400, detail="请先完成阅读")
-    
+
     result = await db.execute(
         select(ChapterExercise).where(ChapterExercise.chapter_id == chapter_id).order_by(ChapterExercise.sort_order)
     )
     exercises = result.scalars().all()
-    
+
     correct_count = 0
     total_count = len(exercises)
     results = []
-    
+
     for ex in exercises:
         q = await db.get(Question, ex.question_id)
         if not q:
             continue
-        
+
         user_answer = next((a["answer"] for a in answers if a["question_id"] == q.id), None)
         correct_answer = q.answer  # Question model uses 'answer' field (not 'correct_answer')
         is_correct = str(user_answer) == str(correct_answer)
-        
+
         if is_correct:
             correct_count += 1
-        
+
         results.append({
             "question_id": q.id,
             "user_answer": user_answer,
@@ -860,11 +873,11 @@ async def submit_exercises(
             "is_correct": is_correct,
             "explanation": q.explanation
         })
-    
+
     passed = correct_count >= total_count * 0.7
     progress.practice_done_at = datetime.now(timezone.utc).replace(tzinfo=None)
     progress.tab_switch_count = max(progress.tab_switch_count or 0, tab_switches)
-    
+
     if passed:
         if self_test:
             # 自测模式：直接完成
@@ -876,9 +889,9 @@ async def submit_exercises(
             message = f"练习通过！（{correct_count}/{total_count}）等待教练发布随堂测验"
     else:
         message = f"练习未通过（{correct_count}/{total_count}），请重新练习"
-    
+
     await db.commit()
-    
+
     return {
         "success": passed,
         "score": f"{correct_count}/{total_count}",

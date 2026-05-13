@@ -1,16 +1,17 @@
 """
 API 响应格式化工具
 """
-from typing import Any, Optional
-from pydantic import BaseModel, ConfigDict
 from datetime import datetime, timezone
+from typing import Any
+
+from pydantic import BaseModel
 
 
 class ApiResponse(BaseModel):
     """标准 API 响应"""
     code: int = 200
     message: str = "success"
-    data: Optional[Any] = None
+    data: Any | None = None
     timestamp: str = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
 
 
@@ -18,7 +19,7 @@ class ApiError(BaseModel):
     """标准错误响应"""
     code: int = 400
     message: str = "error"
-    detail: Optional[str] = None
+    detail: str | None = None
 
 
 def _now() -> datetime:

@@ -2,29 +2,32 @@
 入学文书 API - 潜水培训系统
 包含4份文书的模版管理、学员填写、教练审批、PDF生成
 """
-from datetime import datetime, timezone
-from typing import Optional, List, Any
-import os
 import base64
-import json
+import os
 import re
-from io import BytesIO
+import shutil
+from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict
-from sqlalchemy import select, and_, or_, text as sql_text
+from sqlalchemy import and_, delete, select
+from sqlalchemy import text as sql_text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
-import shutil
 
+from app.api.admin.shared import require_admin, require_staff, require_student
 from app.core.database import get_db
 from app.core.docx_parser import DocumentParser
 from app.models.class_system import (
-    User, Class, ClassMember, DocumentTemplate, DocumentResponse,
-    StudentDocumentStatus, UserRole
+    Class,
+    ClassMember,
+    DocumentResponse,
+    DocumentTemplate,
+    StudentDocumentStatus,
+    User,
+    UserRole,
 )
-from app.api.admin.shared import require_admin, require_staff, require_student
 
 router = APIRouter(tags=["入学文书"])
 
@@ -37,26 +40,26 @@ DOCUMENT_DIR = "/Users/wjjmac/localserver/diving.school/backend/static/documents
 class FieldSchemaItem(BaseModel):
     id: str
     type: str
-    label: Optional[str] = None
-    question: Optional[str] = None
-    required: Optional[bool] = False
-    options: Optional[List[str]] = None
-    field: Optional[str] = None
-    source: Optional[str] = None
+    label: str | None = None
+    question: str | None = None
+    required: bool | None = False
+    options: list[str] | None = None
+    field: str | None = None
+    source: str | None = None
 
 
 class TemplateUpdateRequest(BaseModel):
-    fields_schema: Optional[List[dict]] = None
-    coach_choices: Optional[List[dict]] = None
-    course_choices: Optional[List[dict]] = None
-    institution_name: Optional[str] = None
-    is_required: Optional[bool] = None
-    is_active: Optional[bool] = None
+    fields_schema: list[dict] | None = None
+    coach_choices: list[dict] | None = None
+    course_choices: list[dict] | None = None
+    institution_name: str | None = None
+    is_required: bool | None = None
+    is_active: bool | None = None
 
 
 class DocumentSubmitRequest(BaseModel):
     answers: dict
-    signature_base64: Optional[str] = None  # base64 PNG 数据
+    signature_base64: str | None = None  # base64 PNG 数据
 
 
 class RejectRequest(BaseModel):
@@ -67,12 +70,12 @@ class TemplateResponse(BaseModel):
     id: int
     name: str
     doc_type: str
-    description: Optional[str]
-    static_html: Optional[str]
-    fields_schema: Optional[List[dict]]
-    coach_choices: Optional[List[dict]]
-    course_choices: Optional[List[dict]]
-    institution_name: Optional[str]
+    description: str | None
+    static_html: str | None
+    fields_schema: list[dict] | None
+    coach_choices: list[dict] | None
+    course_choices: list[dict] | None
+    institution_name: str | None
     is_required: bool
     is_active: bool
     sort_order: int
@@ -85,9 +88,9 @@ class DocumentStatusResponse(BaseModel):
     template_name: str
     doc_type: str
     status: str
-    answers: Optional[dict]
-    submitted_at: Optional[datetime]
-    review_comment: Optional[str]
+    answers: dict | None
+    submitted_at: datetime | None
+    review_comment: str | None
     is_required: bool
 
     model_config = ConfigDict(from_attributes=True)
@@ -95,13 +98,13 @@ class DocumentStatusResponse(BaseModel):
 
 class DocumentDetailResponse(BaseModel):
     template: TemplateResponse
-    response: Optional[dict]
+    response: dict | None
     status: str
-    student_profile: Optional[dict] = None
-    courses: Optional[List[dict]] = None  # 课程列表（用于学员选择）
-    instructors: Optional[List[dict]] = None  # 教练列表（用于学员选择）
-    institution_choices: Optional[List[dict]] = None  # 潜水培训机构列表（用于学员选择）
-    class_info: Optional[dict] = None  # 班级信息（用于 readonly_static 字段）
+    student_profile: dict | None = None
+    courses: list[dict] | None = None  # 课程列表（用于学员选择）
+    instructors: list[dict] | None = None  # 教练列表（用于学员选择）
+    institution_choices: list[dict] | None = None  # 潜水培训机构列表（用于学员选择）
+    class_info: dict | None = None  # 班级信息（用于 readonly_static 字段）
 
 
 class ResponseListItem(BaseModel):
@@ -112,9 +115,9 @@ class ResponseListItem(BaseModel):
     template_name: str
     doc_type: str
     status: str
-    submitted_at: Optional[datetime]
-    class_id: Optional[int]
-    class_name: Optional[str]
+    submitted_at: datetime | None
+    class_id: int | None
+    class_name: str | None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -123,22 +126,22 @@ class ResponseDetail(BaseModel):
     id: int
     student_id: int
     student_name: str
-    student_id_card: Optional[str]
-    student_phone: Optional[str]
+    student_id_card: str | None
+    student_phone: str | None
     template_id: int
     template_name: str
     doc_type: str
-    answers: Optional[dict]
-    signature_image: Optional[str]
-    snapshot_name: Optional[str]
-    snapshot_id_number: Optional[str]
-    snapshot_phone: Optional[str]
-    snapshot_instructor_name: Optional[str]
+    answers: dict | None
+    signature_image: str | None
+    snapshot_name: str | None
+    snapshot_id_number: str | None
+    snapshot_phone: str | None
+    snapshot_instructor_name: str | None
     status: str
-    submitted_at: Optional[datetime]
-    reviewed_by: Optional[int]
-    review_comment: Optional[str]
-    reviewed_at: Optional[datetime]
+    submitted_at: datetime | None
+    reviewed_by: int | None
+    review_comment: str | None
+    reviewed_at: datetime | None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -152,7 +155,7 @@ def mask_id_number(id_number: str) -> str:
     return id_number[:6] + "********" + id_number[14:]
 
 
-def calc_age_from_id_card(id_card: str) -> Optional[int]:
+def calc_age_from_id_card(id_card: str) -> int | None:
     """从身份证号推算年龄"""
     if not id_card or len(id_card) != 18:
         return None
@@ -169,7 +172,7 @@ def calc_age_from_id_card(id_card: str) -> Optional[int]:
         return None
 
 
-def extract_birth_date_from_id(id_card: str) -> Optional[str]:
+def extract_birth_date_from_id(id_card: str) -> str | None:
     """从身份证号提取出生日期"""
     if not id_card or len(id_card) != 18:
         return None
@@ -214,7 +217,7 @@ async def save_signature_image(student_id: int, template_id: int, base64_data: s
     return f"signatures/{student_id}/{filename}"
 
 
-async def get_student_class_info(db: AsyncSession, student_id: int) -> Optional[dict]:
+async def get_student_class_info(db: AsyncSession, student_id: int) -> dict | None:
     """获取学员所属班级信息"""
     result = await db.execute(
         select(Class, ClassMember)
@@ -237,7 +240,7 @@ async def get_student_class_info(db: AsyncSession, student_id: int) -> Optional[
     return None
 
 
-async def get_instructor_students(db: AsyncSession, instructor_id: int) -> List[int]:
+async def get_instructor_students(db: AsyncSession, instructor_id: int) -> list[int]:
     """获取教练所带班级的所有学员ID
     
     教练通过 class_members 表关联（role='INSTRUCTOR'），
@@ -254,10 +257,10 @@ async def get_instructor_students(db: AsyncSession, instructor_id: int) -> List[
         )
     )
     class_ids = [row[0] for row in class_result.all()]
-    
+
     if not class_ids:
         return []
-    
+
     # 2. 查询这些班级的所有学员ID
     student_result = await db.execute(
         select(ClassMember.user_id)
@@ -421,7 +424,7 @@ DEFAULT_TEMPLATES = [
 ]
 
 
-async def init_templates(db: AsyncSession) -> List[DocumentTemplate]:
+async def init_templates(db: AsyncSession) -> list[DocumentTemplate]:
     """初始化4份模版"""
     result = await db.execute(select(DocumentTemplate))
     existing = result.scalars().all()
@@ -463,7 +466,7 @@ async def init_templates(db: AsyncSession) -> List[DocumentTemplate]:
 
 # ===== 管理员接口 =====
 
-@router.get("/admin/document-templates", response_model=List[TemplateResponse])
+@router.get("/admin/document-templates", response_model=list[TemplateResponse])
 async def get_templates(
     db: AsyncSession = Depends(get_db),
     current_user = Depends(require_staff)
@@ -566,9 +569,9 @@ async def parse_document_template(
 async def create_template(
     name: str,
     doc_type: str,
-    description: Optional[str] = None,
+    description: str | None = None,
     is_required: bool = True,
-    file: Optional[UploadFile] = File(None),
+    file: UploadFile | None = File(None),
     db: AsyncSession = Depends(get_db),
     current_user = Depends(require_admin)
 ):
@@ -639,7 +642,7 @@ async def delete_template(
 
 # ===== 学员接口 =====
 
-@router.get("/students/me/documents", response_model=List[DocumentStatusResponse])
+@router.get("/students/me/documents", response_model=list[DocumentStatusResponse])
 async def get_my_documents(
     db: AsyncSession = Depends(get_db),
     current_user = Depends(require_student)
@@ -662,7 +665,7 @@ async def get_my_documents(
                 {"cid": membership.class_id}
             )
             template_ids = [row[0] for row in cd_result.fetchall() if row[0]]
-    except Exception as e:
+    except Exception:
         template_ids = []
 
     if not template_ids:
@@ -759,7 +762,7 @@ async def get_my_document_detail(
     course_list = []
 
     # 1. 先找学员所在的班级
-    from app.models.class_system import ClassMember, Class
+    from app.models.class_system import Class, ClassMember
     result = await db.execute(
         select(ClassMember).where(ClassMember.user_id == current_user.id)
     )
@@ -786,7 +789,8 @@ async def get_my_document_detail(
 
     if member:
         # 从 class_members 表查询该班级的教练
-        from app.models.class_system import ClassMember, User as MemberUser
+        from app.models.class_system import ClassMember
+        from app.models.class_system import User as MemberUser
         cm_result = await db.execute(
             select(ClassMember).where(
                 and_(
@@ -833,7 +837,7 @@ async def get_my_document_detail(
         if cls:
             # 获取单位名称（从班级名称，Class模型没有company_id字段）
             unit_name = cls.name  # 默认使用班级名称
-            
+
             class_info_data = {
                 "class_id": cls.id,
                 "class_name": cls.name,
@@ -975,10 +979,10 @@ async def submit_document(
 
 # ===== 教练/管理员接口 =====
 
-@router.get("/admin/document-responses", response_model=List[ResponseListItem])
+@router.get("/admin/document-responses", response_model=list[ResponseListItem])
 async def get_document_responses(
-    class_id: Optional[int] = Query(None),
-    status: Optional[str] = Query(None),
+    class_id: int | None = Query(None),
+    status: str | None = Query(None),
     db: AsyncSession = Depends(get_db),
     current_user = Depends(require_staff)
 ):
@@ -1317,9 +1321,9 @@ async def get_response_pdf(
     try:
         from reportlab.lib.pagesizes import A4
         from reportlab.lib.units import mm
-        from reportlab.pdfgen import canvas
         from reportlab.pdfbase import pdfmetrics
         from reportlab.pdfbase.ttfonts import TTFont
+        from reportlab.pdfgen import canvas
     except ImportError:
         raise HTTPException(status_code=500, detail="reportlab 未安装，请运行: pip install reportlab")
 
@@ -1342,11 +1346,11 @@ async def get_response_pdf(
     try:
         # macOS 系统字体路径
         pdfmetrics.registerFont(TTFont('SimHei', '/System/Library/Fonts/STHeiti Light.ttc'))
-    except Exception as e:
+    except Exception:
         try:
             # 尝试其他字体
             pdfmetrics.registerFont(TTFont('SimHei', '/System/Library/Fonts/PingFang.ttc'))
-        except Exception as e:
+        except Exception:
             font_name = "Helvetica"  # 回退到默认字体
 
     y_position = height - 30 * mm
