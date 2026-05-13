@@ -5,6 +5,7 @@
 
 import bcrypt
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import text as sql_text
 from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 

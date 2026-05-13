@@ -4,6 +4,7 @@
 
 
 from fastapi import APIRouter, Body, Depends, HTTPException
+from sqlalchemy import text as sql_text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db

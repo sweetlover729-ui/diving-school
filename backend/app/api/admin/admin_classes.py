@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 
 import bcrypt
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select, sql_text
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -61,7 +61,7 @@ async def create_class(
     # 添加教材
     for tb_id in (req.textbooks or []):
         await db.execute(
-            sql_text("INSERT INTO class_textbooks (class_id, textbook_id) VALUES (:cid, :tid)"),
+            text("INSERT INTO class_textbooks (class_id, textbook_id) VALUES (:cid, :tid)"),
             {"cid": cls.id, "tid": tb_id}
         )
     await db.commit()
@@ -103,14 +103,14 @@ async def get_class_detail(
 
     # 获取学员数
     member_result = await db.execute(
-        sql_text("SELECT COUNT(*) FROM class_members WHERE class_id = :cid"),
+        text("SELECT COUNT(*) FROM class_members WHERE class_id = :cid"),
         {"cid": class_id}
     )
     member_count = member_result.scalar() or 0
 
     # 获取教材
     textbooks_result = await db.execute(
-        sql_text("""
+        text("""
             SELECT t.id, t.name, t.total_chapters as chapter_count
             FROM class_textbooks ct
             JOIN textbooks t ON ct.textbook_id = t.id
@@ -123,7 +123,7 @@ async def get_class_detail(
 
     # 获取互动式教材（统一表）
     interactive_result = await db.execute(
-        sql_text("""
+        text("""
             SELECT ct.id, ct.textbook_id, t.name, t.total_chapters as chapter_count
             FROM class_textbooks ct
             JOIN textbooks t ON ct.textbook_id = t.id
@@ -138,7 +138,7 @@ async def get_class_detail(
     try:
         async with db.begin_nested():
             docs_result = await db.execute(
-                sql_text("""
+                text("""
                     SELECT dt.id, dt.name, dt.doc_type, dt.is_required, cd.published_at
                     FROM class_documents cd
                     JOIN document_templates dt ON cd.template_id = dt.id
@@ -153,7 +153,7 @@ async def get_class_detail(
 
     # 获取成员（前端依赖 data.members）
     members_result = await db.execute(
-        sql_text("""
+        text("""
             SELECT cm.id, cm.user_id, cm.role, u.username as name, u.id_card_encrypted as id_card, u.phone,
                    u.province, u.city, cm.joined_at
             FROM class_members cm
@@ -242,7 +242,7 @@ async def get_class_analytics(
 
     # 获取学员进度：用 chapter_progress + test_results 分别计算
     progress_result = await db.execute(
-        sql_text("""
+        text("""
             SELECT 
                 u.id, 
                 u.username as name, 
@@ -285,7 +285,7 @@ async def get_class_documents(
     """Get Class Documents"""
     try:
         result = await db.execute(
-            sql_text("""
+            text("""
                 SELECT dt.id, dt.name, dt.doc_type, dt.is_required, cd.published_at
                 FROM class_documents cd
                 JOIN document_templates dt ON cd.template_id = dt.id
@@ -309,7 +309,7 @@ async def remove_class_document(
     """Remove Class Document"""
     try:
         await db.execute(
-            sql_text("DELETE FROM class_documents WHERE class_id = :cid AND (id = :did OR template_id = :did)"),
+            text("DELETE FROM class_documents WHERE class_id = :cid AND (id = :did OR template_id = :did)"),
             {"cid": class_id, "did": document_id}
         )
         await db.commit()
@@ -369,7 +369,7 @@ async def list_class_members(
         params["role"] = role
     sql += " ORDER BY cm.joined_at"
 
-    result = await db.execute(sql_text(sql), params)
+    result = await db.execute(text(sql), params)
     return [dict(r._mapping) for r in result.fetchall()]
 
 
@@ -475,7 +475,7 @@ async def remove_class_member(
 ):
     """Remove Class Member"""
     await db.execute(
-        sql_text("DELETE FROM class_members WHERE id = :mid AND class_id = :cid"),
+        text("DELETE FROM class_members WHERE id = :mid AND class_id = :cid"),
         {"mid": member_id, "cid": class_id}
     )
     await db.commit()
@@ -491,7 +491,7 @@ async def remove_class_member_by_user(
 ):
     """Remove Class Member"""
     await db.execute(
-        sql_text("DELETE FROM class_members WHERE user_id = :uid AND class_id = :cid"),
+        text("DELETE FROM class_members WHERE user_id = :uid AND class_id = :cid"),
         {"uid": user_id, "cid": class_id}
     )
     await db.commit()
@@ -509,7 +509,7 @@ async def get_student_progress(
     """Get Student Progress"""
     # 读取进度
     progress_result = await db.execute(
-        sql_text("""
+        text("""
             SELECT chapter_id, reading_pages, status, reading_start_at, last_updated
             FROM chapter_progress
             WHERE user_id = :uid
@@ -529,7 +529,7 @@ async def get_class_textbooks(
 ):
     """Get Class Textbooks"""
     result = await db.execute(
-        sql_text("""
+        text("""
             SELECT t.id, t.name, t.total_chapters, t.total_pages, ct.added_at
             FROM class_textbooks ct
             JOIN textbooks t ON ct.textbook_id = t.id
@@ -549,7 +549,7 @@ async def get_class_interactive_textbooks(
 ):
     """Get Class Interactive Textbooks"""
     result = await db.execute(
-        sql_text("""
+        text("""
             SELECT ct.id, ct.textbook_id, t.name, t.total_chapters as chapter_count
             FROM class_textbooks ct
             JOIN textbooks t ON ct.textbook_id = t.id
@@ -635,7 +635,7 @@ async def add_class_textbook(
     if not tb:
         raise HTTPException(status_code=404, detail="教材不存在")
     await db.execute(
-        sql_text("""
+        text("""
             INSERT INTO class_textbooks (class_id, textbook_id, added_at)
             VALUES (:cid, :tid, :now)
             ON CONFLICT (class_id, textbook_id) DO NOTHING
@@ -655,7 +655,7 @@ async def remove_class_textbook(
 ):
     """Remove Class Textbook"""
     await db.execute(
-        sql_text("DELETE FROM class_textbooks WHERE class_id = :cid AND textbook_id = :tid"),
+        text("DELETE FROM class_textbooks WHERE class_id = :cid AND textbook_id = :tid"),
         {"cid": class_id, "tid": textbook_id}
     )
     await db.commit()
