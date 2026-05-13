@@ -3,7 +3,7 @@
 """
 
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Body
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
