@@ -4,6 +4,8 @@
 
 from fastapi import APIRouter
 
+from app.core.database import get_db
+
 from .shared import *
 
 router = APIRouter(prefix="", tags=["管理员-学员管理"])

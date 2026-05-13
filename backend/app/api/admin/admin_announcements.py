@@ -3,6 +3,7 @@
 """
 from fastapi import APIRouter, Query
 
+from app.core.database import get_db
 from app.models.class_system import Announcement, Class
 
 from .shared import *

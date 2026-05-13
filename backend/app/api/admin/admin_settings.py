@@ -4,6 +4,7 @@
 
 from fastapi import APIRouter
 
+from app.core.database import get_db
 from app.models.class_system import Question
 
 from .shared import *
