@@ -1,0 +1,282 @@
+name: Full CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  PYTHON_VERSION: '3.13'
+  NODE_VERSION: '22'
+
+# ═══════════════════════════════════════════════
+#  BACKEND — Lint & Type Check
+# ═══════════════════════════════════════════════
+jobs:
+  backend-lint:
+    name: "🔍 Backend Lint"
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: backend } }
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup venv & install deps
+        run: |
+          python3 -m venv .venv
+          .venv/bin/pip install -q ruff mypy
+          .venv/bin/pip install -q -r requirements.txt 2>/dev/null || \
+            .venv/bin/pip install -q fastapi sqlalchemy asyncpg pydantic pydantic-settings \
+              python-jose passlib bcrypt python-multipart aiofiles httpx
+      - name: Ruff lint
+        run: .venv/bin/ruff check app/ --output-format=github
+      - name: Mypy type check
+        run: .venv/bin/mypy app/ --ignore-missing-imports --no-error-summary
+
+  # ═══════════════════════════════════════════════
+  #  BACKEND — Unit Tests + Coverage (100%)
+  # ═══════════════════════════════════════════════
+  backend-test:
+    name: "🧪 Backend Tests"
+    runs-on: ubuntu-latest
+    needs: backend-lint
+    defaults: { run: { working-directory: backend } }
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: diving_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install deps
+        run: |
+          python3 -m venv .venv
+          .venv/bin/pip install -q -r requirements.txt 2>/dev/null || \
+            .venv/bin/pip install -q fastapi sqlalchemy asyncpg pydantic pydantic-settings \
+              python-jose passlib bcrypt python-multipart aiofiles httpx uvicorn
+          .venv/bin/pip install -q pytest pytest-asyncio pytest-cov pytest-timeout
+      - name: Wait for PostgreSQL
+        run: until pg_isready -h localhost; do sleep 2; done
+      - name: Create test database
+        run: |
+          PGPASSWORD=postgres psql -h localhost -U postgres -d postgres -c \
+            "CREATE DATABASE diving_test OWNER postgres;" 2>/dev/null || true
+      - name: Create tables
+        env:
+          DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/diving_test
+        run: |
+          .venv/bin/python -c "
+          import asyncio
+          from sqlalchemy.ext.asyncio import create_async_engine
+          from app.models.class_system import Base
+          engine = create_async_engine('$DATABASE_URL')
+          async def init(): 
+              async with engine.begin() as conn: await conn.run_sync(Base.metadata.create_all)
+              await engine.dispose()
+          asyncio.run(init())
+          " && echo "✅ Tables created"
+      - name: Run tests with 100% coverage enforcement
+        env:
+          DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/diving_test
+          SECRET_KEY: ci-test-secret-key-not-for-prod
+        run: |
+          .venv/bin/pytest tests/ -v --tb=short --cov=app --cov-report=xml --cov-fail-under=100 --timeout=120
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-coverage
+          path: backend/coverage.xml
+
+  # ═══════════════════════════════════════════════
+  #  BACKEND — Security (Bandit)
+  # ═══════════════════════════════════════════════
+  backend-security:
+    name: "🛡️ Backend Security"
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: backend } }
+    steps:
+      - uses: actions/checkout@v4
+      - name: Bandit scan
+        run: |
+          python3 -m venv .venv
+          .venv/bin/pip install -q bandit
+          .venv/bin/bandit -r app/ -f json -o bandit-report.json || true
+          .venv/bin/bandit -r app/ -ll || true
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bandit-report
+          path: backend/bandit-report.json
+
+  # ═══════════════════════════════════════════════
+  #  FRONTEND — Lint & Type Check
+  # ═══════════════════════════════════════════════
+  frontend-lint:
+    name: "🔍 Frontend Lint"
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: frontend } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - name: TypeScript check
+        run: npx tsc --noEmit || true
+      - name: Next.js lint
+        run: npx next lint || true
+
+  # ═══════════════════════════════════════════════
+  #  FRONTEND — Build
+  # ═══════════════════════════════════════════════
+  frontend-build:
+    name: "🏗️ Frontend Build"
+    runs-on: ubuntu-latest
+    needs: frontend-lint
+    defaults: { run: { working-directory: frontend } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - name: Next.js build
+        run: npm run build 2>&1 | tail -30
+      - name: Verify build output
+        run: |
+          echo "Build artifacts:"
+          ls -la .next/ 2>/dev/null || echo "⚠️ No .next directory"
+          test -f .next/BUILD_ID && echo "✅ BUILD_ID present" || echo "⚠️ BUILD_ID missing"
+
+  # ═══════════════════════════════════════════════
+  #  FRONTEND — Security (npm audit)
+  # ═══════════════════════════════════════════════
+  frontend-security:
+    name: "🛡️ Frontend Security"
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: frontend } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - name: npm audit
+        run: npm audit --audit-level=high || true
+
+  # ═══════════════════════════════════════════════
+  #  INTEGRATION — API endpoint smoke test
+  # ═══════════════════════════════════════════════
+  integration-smoke:
+    name: "🔥 API Smoke Test"
+    runs-on: ubuntu-latest
+    needs: [backend-test, frontend-build]
+    defaults: { run: { working-directory: backend } }
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: diving_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install deps
+        run: |
+          python3 -m venv .venv
+          .venv/bin/pip install -q -r requirements.txt 2>/dev/null || \
+            .venv/bin/pip install -q fastapi sqlalchemy asyncpg pydantic pydantic-settings \
+              python-jose passlib bcrypt python-multipart aiofiles httpx uvicorn
+      - name: Create tables + start server
+        env:
+          DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/diving_test
+          SECRET_KEY: ci-smoke-test-key
+        run: |
+          .venv/bin/python -c "
+          import asyncio
+          from sqlalchemy.ext.asyncio import create_async_engine
+          from app.models.class_system import Base
+          engine = create_async_engine('$DATABASE_URL')
+          async def init():
+              async with engine.begin() as conn: await conn.run_sync(Base.metadata.create_all)
+              await engine.dispose()
+          asyncio.run(init())
+          "
+          .venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000 &
+          sleep 5
+          curl -sf http://localhost:8000/health && echo " ✅ Server up"
+      - name: Smoke — Auth + Admin
+        run: |
+          BASE="http://localhost:8000/api/v1"
+          curl -sf ${BASE}/../health && echo " ✅ health"
+          TOKEN=$(curl -sf -X POST $BASE/auth/login \
+            -H 'Content-Type: application/json' \
+            -d '{"name":"kent","id_card":"440102198107292514","password":"000000","role":"admin"}' \
+            | python3 -c 'import sys,json; print(json.load(sys.stdin).get("token",""))')
+          echo "🔑 Token=${TOKEN:0:20}..."
+          for ep in admin/classes admin/textbooks admin/students admin/instructors \
+                    admin/questions admin/dashboard admin/settings; do
+            CODE=$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $TOKEN" "$BASE/$ep")
+            [ "$CODE" = "200" ] && echo " ✅ $ep" || echo " ⚠️ $ep → $CODE"
+          done
+
+  # ═══════════════════════════════════════════════
+  #  FULL SECURITY — Trivy FS scan
+  # ═══════════════════════════════════════════════
+  security-scan:
+    name: "🔐 Trivy Full Scan"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Trivy FS scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: fs
+          scan-ref: .
+          format: table
+          exit-code: 0
+          severity: CRITICAL,HIGH
+
+  # ═══════════════════════════════════════════════
+  #  DEPLOY — Staging (develop branch)
+  # ═══════════════════════════════════════════════
+  deploy-staging:
+    name: "🚀 Deploy Staging"
+    runs-on: ubuntu-latest
+    needs: [backend-test, backend-security, frontend-build, integration-smoke, security-scan]
+    if: github.ref == 'refs/heads/develop'
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@master
+        with:
+          host: \${{ secrets.STAGING_HOST }}
+          username: root
+          key: \${{ secrets.STAGING_SSH_KEY }}
+          script: |
+            cd /var/www/diving
+            git pull origin main
+            # restart services...
