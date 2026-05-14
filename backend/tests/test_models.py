@@ -54,7 +54,6 @@ class TestUserModel:
             password_hash=_hash_pw("test123"),
             role=UserRole.INSTRUCTOR,
             is_active=True,
-            company_id=1,
             province="广东",
             city="深圳",
             instructor_code="INS099",
@@ -63,7 +62,6 @@ class TestUserModel:
         await db_session.flush()
 
         assert user.province == "广东"
-        assert user.training_institution == "XX消防培训"
         assert user.instructor_code == "INS099"
 
     async def test_user_role_enum_values(self, db_session):

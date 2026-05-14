@@ -12,6 +12,7 @@ from app.models.class_system import (
     ChapterProgressStatus,
     Class,
     ClassMember,
+    ClassStatus,
     LearningPath,
     TestResult,
     User,

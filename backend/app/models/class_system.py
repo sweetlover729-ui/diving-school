@@ -253,7 +253,7 @@ class Textbook(Base):
 class Chapter(Base):
     __tablename__ = "chapters"
     id = Column(Integer, primary_key=True, index=True)
-    module_id = Column(Integer, nullable=False)
+    module_id = Column(Integer, nullable=True)
     title = Column(String(200), nullable=False)
     order = Column("order", Integer, default=0)
     sort_order = Column("sort_order", Integer, default=0)

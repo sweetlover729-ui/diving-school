@@ -803,7 +803,7 @@ async def run_alert_detection(
                 # 检查最后活动时间
                 result = await db.execute(
                     select(AuditLog.created_at).where(
-                        AuditLog.user_id == stu.id
+                        AuditLog.user_name == stu.name
                     ).order_by(AuditLog.created_at.desc()).limit(1)
                 )
                 last = result.scalar_one_or_none()
