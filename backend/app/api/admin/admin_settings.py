@@ -10,7 +10,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.models.class_system import Class, ClassMember, ClassStatus, Question
+from app.models.class_system import AlertRecord, Class, ClassMember, ClassStatus, Question, Textbook
 
 from .shared import *
 
