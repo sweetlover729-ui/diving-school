@@ -3,7 +3,7 @@ Admin 班级管理 API 集成测试
 """
 import pytest
 from datetime import datetime, timezone, timedelta
-from app.models.class_system import Class, ClassStatus
+from app.models.class_system import Class, ClassStatus, Textbook
 
 
 class TestAdminListClasses:
@@ -119,7 +119,7 @@ class TestAdminUpdateClass:
 class TestAdminDeleteClass:
     """删除班级"""
 
-    async def test_delete_existing_class(self, client, db_session, admin_token):
+    async def test_delete_existing_class(self, client, db_session, admin_token, admin_user):
         """删除刚创建的班级"""
         from app.models.class_system import Class
         now = datetime.now(timezone.utc).replace(tzinfo=None)
@@ -128,7 +128,7 @@ class TestAdminDeleteClass:
             start_time=now,
             end_time=now + timedelta(days=30),
             status=ClassStatus.ACTIVE,
-            created_by=1,
+            created_by=admin_user.id,
         )
         db_session.add(cls)
         await db_session.flush()

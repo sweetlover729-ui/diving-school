@@ -15,8 +15,6 @@ if "DATABASE_URL" not in os.environ:
     os.environ["DATABASE_URL"] = "postgresql+asyncpg://onedive:Onedive2024!@localhost:5432/diving_test"
 os.environ["TEST_DATABASE_URL"] = os.environ["DATABASE_URL"]
 
-sys.path.insert(0, "/var/www/diving/backend")
-
 from app.core.database import Base, get_db
 from app.main import app
 from app.models.class_system import (

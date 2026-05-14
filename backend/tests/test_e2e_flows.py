@@ -6,6 +6,8 @@ import pytest
 import json
 from httpx import AsyncClient
 
+from app.models.class_system import Textbook
+
 
 # ════════════════════════════════════════════════════════════════
 # StudentFullFlow — 学员完整生命周期（核心E2E）
