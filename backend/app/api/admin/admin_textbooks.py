@@ -10,6 +10,7 @@ from fastapi import APIRouter, Body, Depends, File, HTTPException, UploadFile
 from sqlalchemy import text as sql_text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.database import get_db
 from app.models.class_system import Textbook
 
