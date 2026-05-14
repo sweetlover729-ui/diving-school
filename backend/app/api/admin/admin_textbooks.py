@@ -4,6 +4,8 @@
 
 
 
+import os
+
 from fastapi import APIRouter, Body, Depends, File, HTTPException, UploadFile
 from sqlalchemy import text as sql_text
 from sqlalchemy.ext.asyncio import AsyncSession
