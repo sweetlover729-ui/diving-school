@@ -2,9 +2,8 @@
 认证API全面测试
 覆盖：登录（多种方式）| 频率限制 | Token解析 | 注册 | 密码修改
 """
+
 import pytest
-import time
-from httpx import AsyncClient
 
 
 class TestLogin:
@@ -78,7 +77,6 @@ class TestLogin:
 
     async def test_login_invalid_role_value(self, client):
         """非法角色值 → 应被拒绝"""
-        import pytest
         try:
             resp = await client.post("/api/v1/auth/login", json={
                 "name": "管理员",
@@ -141,7 +139,8 @@ class TestTokenParsing:
 
     async def test_valid_token_decodes_with_claims(self, admin_token):
         """合法JWT token能正确解码"""
-        import jwt
+        from jose import jwt
+
         from app.core.config import settings
         payload = jwt.decode(admin_token, settings.SECRET_KEY, algorithms=["HS256"])
         assert "sub" in payload
@@ -156,10 +155,10 @@ class TestTokenParsing:
 
     async def test_tampered_token_returned_by_api(self, admin_token, client):
         """篡改过的JWT签名 → API返回401"""
-        import jwt
         # 修改payload但不改签名
         parts = admin_token.split(".")
-        import base64, json
+        import base64
+        import json
         payload = json.loads(base64.urlsafe_b64decode(parts[1] + "=="))
         payload["user_id"] = 99999
         tampered_payload = base64.urlsafe_b64encode(json.dumps(payload).encode()).decode().rstrip("=")

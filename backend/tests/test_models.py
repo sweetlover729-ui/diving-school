@@ -5,7 +5,12 @@
 import json
 from datetime import datetime, timedelta, timezone
 
+import bcrypt
 import pytest
+
+
+def _hash_pw(password: str) -> str:
+    return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
 
 from app.models.class_system import (
     Chapter,
@@ -30,7 +35,8 @@ class TestUserModel:
     """用户模型测试"""
 
     async def test_create_user_basic(self, db_session):
-        user = User(name="张三", phone="13800138001", role=UserRole.STUDENT)
+        user = User(name="张三", phone="13800138001", role=UserRole.STUDENT,
+                    password_hash=_hash_pw("test123"))
         db_session.add(user)
         await db_session.flush()
 
@@ -45,13 +51,12 @@ class TestUserModel:
             name="李四",
             id_card="440102199001011234",
             phone="13900139001",
-            password_hash="hashed_secure_pw",
+            password_hash=_hash_pw("test123"),
             role=UserRole.INSTRUCTOR,
             is_active=True,
             company_id=1,
             province="广东",
             city="深圳",
-            training_institution="XX消防培训",
             instructor_code="INS099",
         )
         db_session.add(user)
@@ -65,7 +70,8 @@ class TestUserModel:
         """角色枚举值必须为合法值"""
         valid_roles = [UserRole.ADMIN, UserRole.INSTRUCTOR, UserRole.MANAGER, UserRole.STUDENT]
         for role in valid_roles:
-            user = User(name=f"test_{role.value}", phone=f"13800{role.value}", role=role)
+            user = User(name=f"test_{role.value}", phone=f"13800{role.value}", role=role,
+                        password_hash=_hash_pw("test123"))
             db_session.add(user)
         await db_session.flush()
 
@@ -74,24 +80,28 @@ class TestUserModel:
         assert result.scalar() == 4
 
     async def test_user_default_is_active_true(self, db_session):
-        user = User(name="默认激活", phone="13800138002", role=UserRole.STUDENT)
+        user = User(name="默认激活", phone="13800138002", role=UserRole.STUDENT,
+                    password_hash=_hash_pw("test123"))
         db_session.add(user)
         await db_session.flush()
         assert user.is_active is True
 
     async def test_user_inactive_flag(self, db_session):
-        user = User(name="禁用用户", phone="13800138003", role=UserRole.STUDENT, is_active=False)
+        user = User(name="禁用用户", phone="13800138003", role=UserRole.STUDENT,
+                    is_active=False, password_hash=_hash_pw("test123"))
         db_session.add(user)
         await db_session.flush()
         assert user.is_active is False
 
     async def test_user_phone_unique(self, db_session):
         """手机号在业务层面应有唯一约束（模型层面无硬约束）"""
-        u1 = User(name="用户1", phone="13800138004", role=UserRole.STUDENT)
+        u1 = User(name="用户1", phone="13800138004", role=UserRole.STUDENT,
+                   password_hash=_hash_pw("test123"))
         db_session.add(u1)
         await db_session.flush()
 
-        u2 = User(name="用户2", phone="13800138004", role=UserRole.STUDENT)
+        u2 = User(name="用户2", phone="13800138004", role=UserRole.STUDENT,
+                   password_hash=_hash_pw("test456"))
         db_session.add(u2)
         await db_session.flush()  # 模型无unique约束，不应报错
         assert u2.id != u1.id
@@ -99,7 +109,8 @@ class TestUserModel:
     async def test_user_name_required(self, db_session):
         """name 为必填字段 nullable=False"""
         from sqlalchemy.exc import IntegrityError
-        user = User(phone="13800138005", role=UserRole.STUDENT, name=None)
+        user = User(phone="13800138005", role=UserRole.STUDENT, name=None,
+                    password_hash=_hash_pw("test123"))
         db_session.add(user)
         with pytest.raises(IntegrityError):
             await db_session.flush()

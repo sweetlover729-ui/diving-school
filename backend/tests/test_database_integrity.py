@@ -3,11 +3,12 @@ test_database_integrity.py — Database Integrity Tests
 Verifies FK constraints, unique constraints, required fields, enums, cascade delete.
 Uses direct psycopg2 connection for raw SQL testing.
 """
-import pytest
-import uuid
 import os
+import uuid
+
+import pytest
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 pytestmark = pytest.mark.asyncio
 
@@ -37,6 +38,7 @@ class TestFKConstraints:
     ):
         """Class with non-existent instructor_id should fail."""
         from datetime import datetime, timedelta, timezone
+
         from app.models.class_system import Class, ClassStatus
 
         now = datetime.now(timezone.utc).replace(tzinfo=None)
@@ -240,7 +242,7 @@ class TestCascadeDelete:
         This means deleting a class does NOT automatically delete ClassMember records.
         This test verifies the FK constraint exists and the behavior is intentional.
         """
-        from app.models.class_system import ClassMember as CM, UserRole
+        from app.models.class_system import ClassMember, UserRole
         
         # Add a class member
         member = ClassMember(
@@ -278,6 +280,7 @@ class TestDataConsistency:
     ):
         """Class end_time should be after start_time."""
         from datetime import datetime, timedelta, timezone
+
         from app.models.class_system import Class, ClassStatus
 
         now = datetime.now(timezone.utc).replace(tzinfo=None)
