@@ -84,7 +84,7 @@ class HttpClient {
     throw new Error(errorMsg);
   }
 
-  async get<T = unknown>(path: string): Promise<T> {
+  async get<T = any>(path: string): Promise<T> {
     const response = await fetch(this.getUrl(path), {
       method: 'GET',
       headers: this.getHeaders(),
@@ -105,7 +105,7 @@ class HttpClient {
     }
   }
 
-  async post<T = unknown>(path: string, data?: Record<string, unknown>): Promise<T> {
+  async post<T = unknown>(path: string, data?: any): Promise<T> {
     const response = await fetch(this.getUrl(path), {
       method: 'POST',
       headers: this.getHeaders(),
@@ -127,7 +127,7 @@ class HttpClient {
     }
   }
 
-  async put<T = unknown>(path: string, data?: Record<string, unknown>): Promise<T> {
+  async put<T = unknown>(path: string, data?: any): Promise<T> {
     const response = await fetch(this.getUrl(path), {
       method: 'PUT',
       headers: this.getHeaders(),
