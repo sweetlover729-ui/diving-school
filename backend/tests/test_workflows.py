@@ -103,7 +103,7 @@ class TestAdminWorkflow:
         ann_resp = await api_client.post(
             "/api/v1/admin/announcements",
             headers=auth(admin_token),
-            json={"title": ann_name, "content": "工作流测试公告", "priority": "normal"}
+            json={"title": ann_name, "content": "工作流测试公告", "priority": "normal", "class_id": class_id}
         )
         assert ann_resp.status_code == 200, f"Step 7 failed: create announcement {ann_resp.text}"
         print("  Step 7: create announcement - PASS")
@@ -262,7 +262,7 @@ class TestManagerWorkflow:
         ann_resp = await api_client.post(
             "/api/v1/manager/announcements",
             headers=auth(manager_in_class_token),
-            json={"title": ann_name, "content": "工作流测试公告", "priority": "normal"}
+            json={"title": ann_name, "content": "工作流测试公告", "priority": "normal", "class_id": class_id}
         )
         assert ann_resp.status_code == 200, f"Step 5 failed: create announcement {ann_resp.text}"
         ann_id = ann_resp.json().get("id")
