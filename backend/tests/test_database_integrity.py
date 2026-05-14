@@ -115,27 +115,27 @@ class TestUniqueConstraints:
             assert "unique" in str(e).lower() or "duplicate" in str(e).lower() or "violates" in str(e).lower()
             print("PASS: test_unique_user_id_card")
 
-    async def test_unique_company_code(
-        self, db_session: AsyncSession, test_company
+    async def test_unique_category_code(
+        self, db_session: AsyncSession, test_category
     ):
-        """Duplicate company code should fail."""
-        from app.models.class_system import Company
+        """Duplicate category code should fail."""
+        from app.models.class_system import Category
 
-        dup = Company(
-            name=f"重复公司_{uuid.uuid4().hex[:6]}",
-            code=test_company.code,  # Same code
-            province="广东",
-            city="广州",
+        dup = Category(
+            name=f"重复分类_{uuid.uuid4().hex[:6]}",
+            code=test_category.code,  # Same code
+            sort_order=1,
+            is_active=True,
         )
         db_session.add(dup)
         try:
             await db_session.flush()
             await db_session.rollback()
-            pytest.fail("Expected unique constraint violation for duplicate company code")
+            pytest.fail("Expected unique constraint violation for duplicate category code")
         except Exception as e:
             err_str = str(e).lower()
-            assert "unique" in err_str or "duplicate" in err_str or "violates" in err_str or "company_code_key" in err_str
-            print("PASS: test_unique_company_code")
+            assert "unique" in err_str or "duplicate" in err_str or "violates" in err_str or "category_code_key" in err_str
+            print("PASS: test_unique_category_code")
 
 
 # ── Required Fields ──────────────────────────────────────────

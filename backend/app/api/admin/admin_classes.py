@@ -7,11 +7,11 @@ from datetime import datetime, timedelta
 
 import bcrypt
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select, text
+from sqlalchemy import delete, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.models.class_system import Class, ClassMember, ClassStatus
+from app.models.class_system import ChapterProgress, Class, ClassMember, ClassStatus
 
 from .shared import *
 
@@ -218,9 +218,10 @@ async def delete_class(
     if not cls:
         raise HTTPException(status_code=404, detail="班级不存在")
     try:
-        # ChapterProgress 无 cascade，需手动清理
+        # ClassMember, ChapterProgress 无 cascade，需手动清理
+        await db.execute(delete(ClassMember).where(ClassMember.class_id == class_id))
         await db.execute(delete(ChapterProgress).where(ChapterProgress.class_id == class_id))
-        # Class 的 cascade 会自动清理: ClassMember, ClassTextbook, Test → TestResult
+        # Class 的 cascade 会自动清理: ClassTextbook, Test → TestResult
         await db.delete(cls)
         await db.commit()
     except Exception as e:

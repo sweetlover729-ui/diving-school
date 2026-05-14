@@ -163,7 +163,7 @@ class Class(Base):
 class ClassMember(Base):
     __tablename__ = "class_members"
     id = Column(Integer, primary_key=True, index=True)
-    class_id = Column(Integer, ForeignKey("classes.id"), nullable=False)
+    class_id = Column(Integer, ForeignKey("classes.id", ondelete="SET NULL"), nullable=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     role = Column(
         Enum(UserRole, values_callable=lambda e: [x.value for x in e]),
