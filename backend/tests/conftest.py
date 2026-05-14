@@ -1,12 +1,13 @@
 """conftest.py — 全局测试配置（V3 修复版）"""
 import os
 import sys
+from collections.abc import AsyncGenerator
+
+import bcrypt
 import pytest
 import pytest_asyncio
-from typing import AsyncGenerator
-from httpx import AsyncClient, ASGITransport
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
-import bcrypt
+from httpx import ASGITransport, AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 # 关键：在导入 app.main 之前设置 TEST_DATABASE_URL
 # CI 环境已通过 env 设置 DATABASE_URL，应优先使用；本地无设置时用测试凭证
@@ -16,13 +17,22 @@ os.environ["TEST_DATABASE_URL"] = os.environ["DATABASE_URL"]
 
 sys.path.insert(0, "/var/www/diving/backend")
 
-from app.main import app
 from app.core.database import Base, get_db
+from app.main import app
 from app.models.class_system import (
-    User, UserRole, Class, ClassMember, ClassStatus,
-    Company, Textbook, Chapter, Question, QuestionType,
-    Test as TestModel, TestType, TestStatus,
-    Category, Course, Module,
+    Category,
+    Chapter,
+    Class,
+    ClassMember,
+    ClassStatus,
+    Company,
+    Course,
+    Module,
+    Question,
+    QuestionType,
+    Textbook,
+    User,
+    UserRole,
 )
 
 TEST_DATABASE_URL = os.getenv(
@@ -37,7 +47,9 @@ def _hash_pw(password: str) -> str:
 
 def _make_token(user_id: int, role: str) -> str:
     from datetime import datetime, timedelta, timezone
+
     from jose import jwt
+
     from app.core.config import settings
     expire = datetime.now(timezone.utc) + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     payload = {
@@ -68,7 +80,7 @@ async def db_engine():
             for tbl in tables:
                 try:
                     await conn.execute(text(f"TRUNCATE TABLE {tbl} CASCADE"))
-                except Exception as e:
+                except Exception:
                     # Table might be locked or have issues, try DELETE as fallback
                     try:
                         await conn.execute(text(f"DELETE FROM {tbl}"))
@@ -134,7 +146,9 @@ async def _create_user(db_session, username, phone, role, password="test123",
 
 @pytest_asyncio.fixture
 async def admin_user(db_session) -> User:
-    return await _create_user(db_session, "test_admin", "13800000011", UserRole.ADMIN)
+    # name/id_card must match test_auth_v2.py test_all_roles_can_login & test_admin_login_by_id_card
+    return await _create_user(db_session, "管理员", "13800000011", UserRole.ADMIN,
+                             id_card="440102198107010001")
 
 
 @pytest.fixture
@@ -144,7 +158,8 @@ def admin_token(admin_user):
 
 @pytest_asyncio.fixture
 async def manager_user(db_session) -> User:
-    return await _create_user(db_session, "test_manager", "13800000012", UserRole.MANAGER,
+    # name/phone must match test_auth_v2.py test_all_roles_can_login
+    return await _create_user(db_session, "管理干部A", "13800000002", UserRole.MANAGER,
                                province="广东", city="广州")
 
 
@@ -155,8 +170,11 @@ def manager_token(manager_user):
 
 @pytest_asyncio.fixture
 async def instructor_user(db_session) -> User:
-    return await _create_user(db_session, "test_instructor", "13800000013", UserRole.INSTRUCTOR,
-                               province="广东", city="广州", instructor_code="TEST001")
+    # name/id_card must match test_auth_v2.py test_all_roles_can_login
+    # id_card set explicitly to match hardcoded test value
+    return await _create_user(db_session, "教官A", "13800000013", UserRole.INSTRUCTOR,
+                               province="广东", city="广州", instructor_code="TEST001",
+                               id_card="440102198107010003")
 
 
 @pytest.fixture
@@ -166,7 +184,10 @@ def instructor_token(instructor_user):
 
 @pytest_asyncio.fixture
 async def student_user(db_session) -> User:
-    return await _create_user(db_session, "test_student", "13800000014", UserRole.STUDENT)
+    # id_card must match test_auth_v2.py test_all_roles_can_login (student row)
+    # phone must match test_student_login_by_id_card_and_phone
+    return await _create_user(db_session, "学员A", "13800000004", UserRole.STUDENT,
+                               id_card="440102198107010004")
 
 
 @pytest.fixture
