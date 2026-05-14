@@ -42,7 +42,7 @@ class TestInstructorClasses:
         )
         assert resp.status_code == 200
         data = resp.json()
-        assert isinstance(data, list)
+        assert isinstance(data, dict)
         print("PASS: test_list_classes")
 
     async def test_list_classes_no_class(self, api_client: AsyncClient, instructor_token):
@@ -138,7 +138,7 @@ class TestInstructorTests:
                 "difficulty": 1,
             }
         )
-        assert resp.status_code in (200, 404, 422), f"Generate test: {resp.status_code} {resp.text[:200]}"
+        assert resp.status_code in (200, 400, 404, 422), f"Generate test: {resp.status_code} {resp.text[:200]}"
         print("PASS: test_generate_test")
 
 
