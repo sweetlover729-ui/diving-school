@@ -904,8 +904,8 @@ async def get_audit_logs(
     return {
         "total": total,
         "items": [{
-            "id": l.id, "user_id": l.user_id, "user_name": l.user_name,
-            "action": l.action, "target_type": l.target_type, "target_id": l.target_id,
+            "id": l.id, "user_name": l.user_name,
+            "action": l.action, "target_type": l.target_type, "target_name": l.target_name,
         "detail": l.details, "created_at": l.created_at.isoformat() if l.created_at else None
         } for l in items]
     }

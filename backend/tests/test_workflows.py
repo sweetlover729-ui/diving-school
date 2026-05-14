@@ -56,11 +56,13 @@ class TestAdminWorkflow:
 
         # Step 4: Create course
         course_name = f"工作流课程_{uuid.uuid4().hex[:6]}"
+        course_code = f"CRS{uuid.uuid4().hex[:8].upper()}"
         course_resp = await api_client.post(
             "/api/v1/admin/courses",
             headers=auth(admin_token),
             json={
                 "name": course_name,
+                "code": course_code,
                 "description": "工作流测试课程",
                 "category_id": cat_id,
             }
