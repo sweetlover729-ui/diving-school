@@ -43,10 +43,11 @@ class TestAdminWorkflow:
 
         # Step 3: Create category
         cat_name = f"工作流分类_{uuid.uuid4().hex[:6]}"
+        cat_code = f"WF{uuid.uuid4().hex[:8].upper()}"
         cat_resp = await api_client.post(
             "/api/v1/admin/categories",
             headers=auth(admin_token),
-            json={"name": cat_name, "description": "工作流测试", "sort_order": 1}
+            json={"name": cat_name, "code": cat_code, "description": "工作流测试", "sort_order": 1}
         )
         assert cat_resp.status_code == 200, f"Step 3 failed: create category {cat_resp.text}"
         cat_id = cat_resp.json().get("id")
